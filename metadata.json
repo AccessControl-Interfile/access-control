@@ -1,0 +1,5 @@
+{
+  "name": "Controle de Acessos Operacionais",
+  "description": "Sistema para gerenciar e monitorar os acessos de analistas a sistemas operacionais, com controle de status (Ok, Pendente, Acesso Perdido, Não Utiliza).",
+  "requestFramePermissions": []
+}
