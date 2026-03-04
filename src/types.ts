@@ -86,8 +86,15 @@ export interface Access {
 export interface AccessRequest {
   id: string;
   requestNumber: string;
-  analystData: Partial<Analyst>;
-  systemIds: string[];
+  type?: 'new_analyst' | 'status_change';
+  analystData?: Partial<Analyst>;
+  systemIds?: string[];
+  statusChangeData?: {
+    analystId: string;
+    systemId: string;
+    newStatus: AccessStatus;
+    oldStatus: AccessStatus;
+  };
   status: 'pending' | 'approved' | 'rejected';
   requestedBy: string;
   requestedByName: string;

@@ -468,6 +468,12 @@ export default function App() {
               isSystem: true
             },
             {
+              id: 'treinador',
+              name: 'Treinador',
+              permissions: ['analysts_access_status'],
+              isSystem: true
+            },
+            {
               id: 'requester',
               name: 'Solicitante',
               permissions: ['request_access'],
@@ -639,10 +645,76 @@ export default function App() {
 
   const handleUpdateAccess = (analystId: string, systemId: string, status: AccessStatus) => {
     if (!canManageAccess) return;
-    const accessRef = ref(db, `accesses/${analystId}_${systemId}`);
+    
+    const currentUserData = users.find(u => u.id === user?.uid);
+    const userRole = roles.find(r => r.id === currentUserData?.roleId);
+    
+    // Check if the user has the permission to change status
+    const canChangeStatus = currentUserData?.roleId === 'admin' || 
+                           currentUserData?.permissions?.includes('analysts_access_status') ||
+                           userRole?.permissions?.includes('analysts_access_status');
+                           
+    // Check if the user has the permission to approve (Admins and Supervisors)
+    const canApprove = currentUserData?.roleId === 'admin' || 
+                      currentUserData?.permissions?.includes('approve_access') ||
+                      userRole?.permissions?.includes('approve_access');
+
+    // Check if the role is explicitly "Treinador"
+    const isTreinadorRole = currentUserData?.roleId === 'treinador' || 
+                           userRole?.name.toLowerCase() === 'treinador';
+
+    // If they are a Treinador OR (can change status but CANNOT approve), they need approval
+    const needsApproval = isTreinadorRole || (canChangeStatus && !canApprove);
+    
+    // Safety check: Admins and Supervisors NEVER need approval for status changes
+    const isPrivileged = currentUserData?.roleId === 'admin' || canApprove;
+    const finalNeedsApproval = needsApproval && !isPrivileged;
+
     const oldAccess = accesses.find(a => a.analystId === analystId && a.systemId === systemId);
     const analyst = analysts.find(a => a.id === analystId);
     const system = systems.find(s => s.id === systemId);
+
+    if (finalNeedsApproval) {
+      const requestId = push(ref(db, 'requests')).key || Math.random().toString(36).substring(2, 15);
+      const requestNumber = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+      
+      const requestData: AccessRequest = {
+        id: requestId,
+        requestNumber,
+        type: 'status_change',
+        status: 'pending',
+        requestedBy: user?.uid || '',
+        requestedByName: currentUserData?.name || user?.email || 'Treinador',
+        requestedAt: new Date().toISOString(),
+        analystData: {
+          name: analyst?.name || 'Analista Desconhecido',
+          email: analyst?.email || ''
+        },
+        statusChangeData: {
+          analystId,
+          systemId,
+          newStatus: status,
+          oldStatus: oldAccess?.status || 'Pendente'
+        }
+      };
+
+      set(ref(db, `requests/${requestId}`), requestData).then(() => {
+        showToast(`Solicitação de mudança de status (${requestNumber}) enviada para aprovação.`, "success");
+        if (user?.email) {
+          logAction(
+            user.email, 
+            'CREATE_REQUEST', 
+            `Solicitou mudança de status do sistema ${system?.name || systemId} para o analista ${analyst?.name || analystId}: ${status}`, 
+            'Solicitações',
+            null,
+            requestData
+          );
+        }
+      });
+      return;
+    }
+
+    const accessRef = ref(db, `accesses/${analystId}_${systemId}`);
     
     const newData = {
       analystId,
@@ -797,6 +869,7 @@ export default function App() {
       const request: any = {
         id: requestId,
         requestNumber,
+        type: 'new_analyst',
         analystData,
         systemIds: selectedSystemsInForm,
         status: 'pending',
@@ -830,9 +903,49 @@ export default function App() {
   const handleApproveRequest = async (request: AccessRequest) => {
     if (!hasPermission('approve_access')) return;
     
+    const currentUserData = users.find(u => u.id === user?.uid);
+
+    if (request.type === 'status_change' && request.statusChangeData) {
+      const { analystId, systemId, newStatus } = request.statusChangeData;
+      const analyst = analysts.find(a => a.id === analystId);
+      const system = systems.find(s => s.id === systemId);
+      
+      const accessRef = ref(db, `accesses/${analystId}_${systemId}`);
+      const newData = {
+        analystId,
+        systemId,
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      };
+
+      await set(accessRef, newData);
+
+      // Update Request
+      await update(ref(db, `requests/${request.id}`), {
+        status: 'approved',
+        approvedBy: user?.uid || '',
+        approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
+        approvedAt: new Date().toISOString()
+      });
+
+      if (user?.email) {
+        await logAction(
+          user.email, 
+          'APPROVE_REQUEST', 
+          `Aprovou mudança de status do sistema ${system?.name || systemId} para o analista ${analyst?.name || analystId}: ${newStatus}`, 
+          'Solicitações',
+          request,
+          newData
+        );
+      }
+
+      setSelectedRequestForApproval(null);
+      showToast("Mudança de status aprovada!", "success");
+      return;
+    }
+
     const analystId = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
     const createdAt = new Date().toISOString();
-    const currentUserData = users.find(u => u.id === user?.uid);
 
     // Create Analyst
     const analystData: any = { 
@@ -851,13 +964,15 @@ export default function App() {
     await set(ref(db, `analysts/${analystId}`), analystData);
 
     // Create Accesses
-    for (const systemId of request.systemIds) {
-      await set(ref(db, `accesses/${analystId}_${systemId}`), {
-        analystId,
-        systemId,
-        status: 'Pendente',
-        updatedAt: new Date().toISOString()
-      });
+    if (request.systemIds) {
+      for (const systemId of request.systemIds) {
+        await set(ref(db, `accesses/${analystId}_${systemId}`), {
+          analystId,
+          systemId,
+          status: 'Pendente',
+          updatedAt: new Date().toISOString()
+        });
+      }
     }
 
     // Update Request
@@ -1594,7 +1709,10 @@ export default function App() {
 
   const hasPermission = (permission: Permission) => {
     if (currentUserData?.roleId === 'admin') return true;
-    return currentUserData?.permissions?.includes(permission) || false;
+    const userRole = roles.find(r => r.id === currentUserData?.roleId);
+    const rolePermissions = userRole?.permissions || [];
+    const userPermissions = currentUserData?.permissions || [];
+    return rolePermissions.includes(permission) || userPermissions.includes(permission);
   };
 
   const canManageAnalysts = hasPermission('analysts_manage');
@@ -2788,13 +2906,13 @@ export default function App() {
 
                           <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              {request.systemIds.length} {request.systemIds.length === 1 ? 'Sistema' : 'Sistemas'}
+                              {request.type === 'status_change' ? 'Mudança de Status' : `${request.systemIds?.length || 0} ${request.systemIds?.length === 1 ? 'Sistema' : 'Sistemas'}`}
                             </span>
-                            {request.status === 'rejected' && (
+                            {request.status === 'rejected' && request.type !== 'status_change' && (
                               <button 
                                 onClick={() => {
                                   setEditingRequest(request);
-                                  setSelectedSystemsInForm(request.systemIds);
+                                  setSelectedSystemsInForm(request.systemIds || []);
                                   setRequestSubTab('new');
                                 }}
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 transition-colors"
@@ -2912,39 +3030,70 @@ export default function App() {
 
                         <div className="p-8 overflow-y-auto flex-1 space-y-8">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Dados do Analista</h4>
-                              <div className="space-y-3">
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-slate-500">Esteira:</span>
-                                  <span className="font-bold text-slate-700">{selectedRequestForApproval.analystData.track}</span>
-                                </div>
-                                {analystFields
-                                  .filter(f => !['name', 'email', 'track'].includes(f.id) && selectedRequestForApproval.analystData[f.id])
-                                  .map(field => (
-                                    <div key={field.id} className="flex justify-between text-sm">
-                                      <span className="text-slate-500">{field.label}:</span>
-                                      <span className="font-bold text-slate-700">{selectedRequestForApproval.analystData[field.id]}</span>
+                            {selectedRequestForApproval.type === 'status_change' ? (
+                              <div className="col-span-full">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Mudança de Status de Acesso</h4>
+                                <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center justify-between">
+                                  <div>
+                                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Sistema</p>
+                                    <p className="font-bold text-slate-800">
+                                      {systems.find(s => s.id === selectedRequestForApproval.statusChangeData?.systemId)?.name || selectedRequestForApproval.statusChangeData?.systemId}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-4">
+                                    <div className="text-center">
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">De</p>
+                                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded uppercase">
+                                        {selectedRequestForApproval.statusChangeData?.oldStatus}
+                                      </span>
                                     </div>
-                                  ))}
+                                    <ChevronRight className="w-4 h-4 text-slate-300" />
+                                    <div className="text-center">
+                                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Para</p>
+                                      <span className="px-2 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded uppercase">
+                                        {selectedRequestForApproval.statusChangeData?.newStatus}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Sistemas Solicitados</h4>
-                              <div className="flex flex-wrap gap-2">
-                                {selectedRequestForApproval.systemIds.map(sid => {
-                                  const system = systems.find(s => s.id === sid);
-                                  return (
-                                    <span key={sid} className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full border border-indigo-100">
-                                      {system?.name || sid}
-                                    </span>
-                                  );
-                                })}
-                                {selectedRequestForApproval.systemIds.length === 0 && (
-                                  <span className="text-xs text-slate-400 italic">Nenhum sistema solicitado.</span>
-                                )}
-                              </div>
-                            </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Dados do Analista</h4>
+                                  <div className="space-y-3">
+                                    <div className="flex justify-between text-sm">
+                                      <span className="text-slate-500">Esteira:</span>
+                                      <span className="font-bold text-slate-700">{selectedRequestForApproval.analystData.track}</span>
+                                    </div>
+                                    {analystFields
+                                      .filter(f => !['name', 'email', 'track'].includes(f.id) && selectedRequestForApproval.analystData[f.id])
+                                      .map(field => (
+                                        <div key={field.id} className="flex justify-between text-sm">
+                                          <span className="text-slate-500">{field.label}:</span>
+                                          <span className="font-bold text-slate-700">{selectedRequestForApproval.analystData[field.id]}</span>
+                                        </div>
+                                      ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Sistemas Solicitados</h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {selectedRequestForApproval.systemIds?.map(sid => {
+                                      const system = systems.find(s => s.id === sid);
+                                      return (
+                                        <span key={sid} className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full border border-indigo-100">
+                                          {system?.name || sid}
+                                        </span>
+                                      );
+                                    })}
+                                    {(!selectedRequestForApproval.systemIds || selectedRequestForApproval.systemIds.length === 0) && (
+                                      <span className="text-xs text-slate-400 italic">Nenhum sistema solicitado.</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </>
+                            )}
                           </div>
 
                           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -2980,7 +3129,7 @@ export default function App() {
                             onClick={() => handleApproveRequest(selectedRequestForApproval)}
                             className="flex-1 px-4 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
                           >
-                            Aprovar Criação
+                            {selectedRequestForApproval.type === 'status_change' ? 'Aprovar Mudança' : 'Aprovar Criação'}
                           </button>
                         </div>
                       </motion.div>
