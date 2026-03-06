@@ -345,6 +345,7 @@ export default function App() {
   const [isAddingField, setIsAddingField] = useState<{ type: 'analyst' | 'system' } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [systemSearchQuery, setSystemSearchQuery] = useState('');
   const [usersLimit, setUsersLimit] = useState(10);
   const [roles, setRoles] = useState<Role[]>([]);
   const [isAddingUser, setIsAddingUser] = useState(false);
@@ -2653,11 +2654,7 @@ export default function App() {
                         </div>
                       )}
                       
-                      <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-slate-400" />
-                          <span className="text-xs font-bold text-slate-600">{usersCount} Ativos</span>
-                        </div>
+                      <div className="flex items-center justify-end pt-4 border-t border-slate-50">
                         {issuesCount > 0 && (
                           <div className="flex items-center gap-1 text-rose-500">
                             <AlertCircle className="w-4 h-4" />
@@ -3667,71 +3664,103 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[70vh] overflow-y-auto"
+              className="bg-white rounded-3xl shadow-2xl w-[95vw] h-[95vh] flex flex-col overflow-hidden"
             >
-              <div className="p-8">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingAnalyst ? 'Editar Analista' : 'Novo Analista'}</h2>
-                <p className="text-slate-500 text-sm mb-6">{editingAnalyst ? 'Atualize os dados do analista.' : 'Cadastre um novo membro na equipe de operação.'}</p>
-                
-                <form onSubmit={handleAddAnalyst} className="space-y-4">
-                  {analystFields.map(field => {
-                    if (field.id === 'name') {
-                      return (
-                        <div key={field.id}>
-                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                            {field.label}
-                          </label>
-                          <input name="name" defaultValue={editingAnalyst?.name} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="Ex: João Silva" />
-                        </div>
-                      );
-                    }
-                    if (field.id === 'email') {
-                      return (
-                        <div key={field.id}>
-                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                            {field.label}
-                          </label>
-                          <input name="email" type="email" defaultValue={editingAnalyst?.email} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="joao.silva@empresa.com" />
-                        </div>
-                      );
-                    }
-                    if (field.id === 'track') {
-                      return (
-                        <div key={field.id}>
-                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                            {field.label}
-                          </label>
-                          <select name="track" defaultValue={editingAnalyst?.track} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
-                            {tracks.map(track => (
-                              <option key={track.id} value={track.name}>{track.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      );
-                    }
-                    // Fallback for custom fields
-                    return (
-                      <div key={field.id}>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                          {field.label}
-                        </label>
+              <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-800 mb-1">{editingAnalyst ? 'Editar Analista' : 'Novo Analista'}</h2>
+                  <p className="text-slate-500 text-sm">{editingAnalyst ? 'Atualize os dados do analista.' : 'Cadastre um novo membro na equipe de operação.'}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setIsAddingAnalyst(false);
+                    setEditingAnalyst(null);
+                    setSystemSearchQuery('');
+                  }}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 md:p-8">
+                <form id="analyst-form" onSubmit={handleAddAnalyst} className="space-y-8">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Dados do Analista</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {analystFields.map(field => {
+                        if (field.id === 'name') {
+                          return (
+                            <div key={field.id}>
+                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                {field.label}
+                              </label>
+                              <input name="name" defaultValue={editingAnalyst?.name} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="Ex: João Silva" />
+                            </div>
+                          );
+                        }
+                        if (field.id === 'email') {
+                          return (
+                            <div key={field.id}>
+                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                {field.label}
+                              </label>
+                              <input name="email" type="email" defaultValue={editingAnalyst?.email} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="joao.silva@empresa.com" />
+                            </div>
+                          );
+                        }
+                        if (field.id === 'track') {
+                          return (
+                            <div key={field.id}>
+                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                                {field.label}
+                              </label>
+                              <select name="track" defaultValue={editingAnalyst?.track} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
+                                {tracks.slice().sort((a, b) => a.name.localeCompare(b.name)).map(track => (
+                                  <option key={track.id} value={track.name}>{track.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        }
+                        // Fallback for custom fields
+                        return (
+                          <div key={field.id}>
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                              {field.label}
+                            </label>
+                            <input 
+                              name={field.id} 
+                              defaultValue={editingAnalyst?.[field.id]} 
+                              disabled={!canManageAnalysts} 
+                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
+                              placeholder={field.description}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-2 mb-4">
+                      <h3 className="text-sm font-bold text-slate-800">Sistemas Utilizados</h3>
+                      <div className="relative w-full sm:w-64">
+                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input 
-                          name={field.id} 
-                          defaultValue={editingAnalyst?.[field.id]} 
-                          disabled={!canManageAnalysts} 
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
-                          placeholder={field.description}
+                          type="text" 
+                          placeholder="Buscar sistema..." 
+                          value={systemSearchQuery}
+                          onChange={(e) => setSystemSearchQuery(e.target.value)}
+                          className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full"
                         />
                       </div>
-                    );
-                  })}
-
-                  <div className="pt-4 border-t border-slate-100">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
-                      Sistemas Utilizados
-                    </label>
-                    <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                      {systems.map(system => (
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                      {systems
+                        .filter(system => system.name.toLowerCase().includes(systemSearchQuery.toLowerCase()))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(system => (
                         <label 
                           key={system.id} 
                           className={cn(
@@ -3756,20 +3785,28 @@ export default function App() {
                             }}
                           />
                           <div className={cn(
-                            "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+                            "w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0",
                             selectedSystemsInForm.includes(system.id)
-                              ? "bg-indigo-600 border-indigo-600 text-white"
-                              : "bg-white border-slate-300"
+                              ? "bg-indigo-600 border-indigo-600"
+                              : "border-slate-300 bg-white"
                           )}>
-                            {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3" />}
+                            {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3 text-white" />}
                           </div>
-                          <span className="text-sm font-medium">{system.name}</span>
+                          <div className="min-w-0">
+                            <span className="text-sm font-bold block truncate">{system.name}</span>
+                            <span className="text-xs opacity-70 block truncate">{system.description}</span>
+                          </div>
                         </label>
                       ))}
+                      {systems.filter(system => system.name.toLowerCase().includes(systemSearchQuery.toLowerCase())).length === 0 && (
+                        <div className="col-span-full text-center py-8 text-slate-400 text-sm">
+                          Nenhum sistema encontrado.
+                        </div>
+                      )}
                     </div>
                   </div>
                   {editingAnalyst && (
-                    <div className="grid grid-cols-2 gap-4 pt-2">
+                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 mt-6">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Data de Criação</label>
                         <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -3786,11 +3823,28 @@ export default function App() {
                       )}
                     </div>
                   )}
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => { setIsAddingAnalyst(false); setEditingAnalyst(null); }} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
-                  </div>
                 </form>
+              </div>
+              
+              <div className="p-6 md:p-8 border-t border-slate-100 flex gap-3 shrink-0 bg-slate-50">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setIsAddingAnalyst(false);
+                    setEditingAnalyst(null);
+                    setSystemSearchQuery('');
+                  }}
+                  className="flex-1 px-4 py-3 bg-white text-slate-600 font-bold rounded-xl hover:bg-slate-100 transition-colors border border-slate-200"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  form="analyst-form"
+                  className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
+                >
+                  {editingAnalyst ? 'Salvar Alterações' : 'Criar Analista'}
+                </button>
               </div>
             </motion.div>
           </div>
