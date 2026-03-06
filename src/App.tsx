@@ -647,28 +647,9 @@ export default function App() {
     if (!canManageAccess) return;
     
     const currentUserData = users.find(u => u.id === user?.uid);
-    const userRole = roles.find(r => r.id === currentUserData?.roleId);
-    
-    // Check if the user has the permission to change status
-    const canChangeStatus = currentUserData?.roleId === 'admin' || 
-                           currentUserData?.permissions?.includes('analysts_access_status') ||
-                           userRole?.permissions?.includes('analysts_access_status');
-                           
-    // Check if the user has the permission to approve (Admins and Supervisors)
-    const canApprove = currentUserData?.roleId === 'admin' || 
-                      currentUserData?.permissions?.includes('approve_access') ||
-                      userRole?.permissions?.includes('approve_access');
-
-    // Check if the role is explicitly "Treinador"
-    const isTreinadorRole = currentUserData?.roleId === 'treinador' || 
-                           userRole?.name.toLowerCase() === 'treinador';
-
-    // If they are a Treinador OR (can change status but CANNOT approve), they need approval
-    const needsApproval = isTreinadorRole || (canChangeStatus && !canApprove);
-    
-    // Safety check: Admins and Supervisors NEVER need approval for status changes
-    const isPrivileged = currentUserData?.roleId === 'admin' || canApprove;
-    const finalNeedsApproval = needsApproval && !isPrivileged;
+    // APENAS o perfil de treinador irá pedir permissão.
+    // Os demais (admin, supervisor, etc.) alteram normalmente sem precisar de aprovação.
+    const finalNeedsApproval = currentUserData?.roleId === 'treinador';
 
     const oldAccess = accesses.find(a => a.analystId === analystId && a.systemId === systemId);
     const analyst = analysts.find(a => a.id === analystId);
