@@ -345,6 +345,7 @@ export default function App() {
   const [isAddingField, setIsAddingField] = useState<{ type: 'analyst' | 'system' } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [usersLimit, setUsersLimit] = useState(10);
   const [roles, setRoles] = useState<Role[]>([]);
   const [isAddingUser, setIsAddingUser] = useState(false);
   const [isAddingRole, setIsAddingRole] = useState(false);
@@ -1899,7 +1900,7 @@ export default function App() {
                 <option value="all">Todos</option>
               </select>
             )}
-            {activeTab !== 'dashboard' && !selectedAnalyst && (
+            {(activeTab === 'analysts' || activeTab === 'systems') && !selectedAnalyst && (
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input 
@@ -2601,7 +2602,12 @@ export default function App() {
                 exit={{ opacity: 0, x: -20 }}
                 className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
               >
-                {systems.map(system => {
+                {systems
+                  .filter(system => 
+                    system.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    system.description.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  .map(system => {
                   const usersCount = accesses.filter(a => a.systemId === system.id && a.status === 'Ok').length;
                   const issuesCount = accesses.filter(a => a.systemId === system.id && (a.status === 'Acesso perdido' || a.status === 'Pendente')).length;
                   
@@ -3529,6 +3535,7 @@ export default function App() {
                                       user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
                                       user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
                                   )
+                                  .slice(0, usersLimit)
                                   .map(user => {
                                   const role = roles.find(r => r.id === user.roleId);
                                   return (
@@ -3567,6 +3574,19 @@ export default function App() {
                                   user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
                               ).length === 0 && (
                                   <p className="text-center text-slate-400 py-4">Nenhum usuário encontrado para a busca.</p>
+                              )}
+                              {users.filter(user => 
+                                  user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
+                                  user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
+                              ).length > usersLimit && (
+                                  <div className="flex justify-center mt-4 pt-4 border-t border-slate-100">
+                                      <button 
+                                          onClick={() => setUsersLimit(prev => prev + 10)}
+                                          className="px-6 py-2 bg-slate-50 text-indigo-600 font-bold rounded-full hover:bg-slate-100 transition-colors border border-slate-200"
+                                      >
+                                          Carregar mais
+                                      </button>
+                                  </div>
                               )}
                           </div>
                       </div>
