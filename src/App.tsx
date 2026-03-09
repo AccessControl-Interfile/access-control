@@ -139,7 +139,7 @@ const UserForm = ({ user, roles, onSave, onCancel, showToast }: { user: User | n
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form key={user?.id || 'new_user'} onSubmit={handleSubmit} className="space-y-6">
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Nome</label>
         <input 
@@ -1186,6 +1186,27 @@ export default function App() {
     const id = formData.get('id') as string;
     const label = formData.get('label') as string;
     const description = formData.get('description') as string;
+
+    const reservedAnalystIds = ['id', 'name', 'email', 'track', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'];
+    const reservedSystemIds = ['id', 'name', 'description'];
+
+    if (isAddingField?.type === 'analyst' && reservedAnalystIds.includes(id)) {
+      showToast("Este ID é reservado pelo sistema. Escolha outro.", "error");
+      return;
+    }
+    if (isAddingField?.type === 'system' && reservedSystemIds.includes(id)) {
+      showToast("Este ID é reservado pelo sistema. Escolha outro.", "error");
+      return;
+    }
+
+    if (isAddingField?.type === 'analyst' && analystFields.some(f => f.id === id)) {
+      showToast("Já existe um campo com este ID.", "error");
+      return;
+    }
+    if (isAddingField?.type === 'system' && systemFields.some(f => f.id === id)) {
+      showToast("Já existe um campo com este ID.", "error");
+      return;
+    }
 
     if (isAddingField?.type === 'analyst') {
       const newFields = [...analystFields, { id, label, description }];
@@ -2732,7 +2753,7 @@ export default function App() {
                       )}
                     </div>
                     <div className="p-8">
-                      <form onSubmit={handleRequestAccess} className="space-y-6">
+                      <form key={editingRequest?.id || 'new_request'} onSubmit={handleRequestAccess} className="space-y-6">
                         {analystFields.map(field => {
                           const defaultValue = editingRequest?.analystData[field.id] || '';
                           
@@ -2779,6 +2800,7 @@ export default function App() {
                               <input 
                                 name={field.id} 
                                 defaultValue={defaultValue}
+                                required
                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                                 placeholder={field.description}
                               />
@@ -3733,7 +3755,8 @@ export default function App() {
                               name={field.id} 
                               defaultValue={editingAnalyst?.[field.id] || ''} 
                               disabled={!canManageAnalysts} 
-                              autoComplete="off"
+                              autoComplete="new-password"
+                              required
                               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                               placeholder={field.description}
                             />
@@ -3881,7 +3904,7 @@ export default function App() {
                           <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                             {field.label}
                           </label>
-                          <textarea name="description" defaultValue={editingSystem?.description} rows={3} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Para que serve este sistema?" />
+                          <textarea name="description" defaultValue={editingSystem?.description} required rows={3} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Para que serve este sistema?" />
                         </div>
                       );
                     }
@@ -3894,7 +3917,8 @@ export default function App() {
                         <input 
                           name={field.id} 
                           defaultValue={editingSystem?.[field.id] || ''} 
-                          autoComplete="off"
+                          autoComplete="new-password"
+                          required
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                           placeholder={field.description}
                         />
@@ -3923,7 +3947,7 @@ export default function App() {
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Novo Campo</h2>
                 <p className="text-slate-500 text-sm mb-6">Adicione um novo campo personalizado.</p>
                 
-                <form onSubmit={handleAddField} className="space-y-4">
+                <form key={isAddingField?.type || 'new_field'} onSubmit={handleAddField} className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">ID do Campo</label>
                     <input name="id" required pattern="[a-z0-9_]+" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="ex: data_nascimento (apenas letras minúsculas e _)" />
@@ -3959,7 +3983,7 @@ export default function App() {
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Editar Campo</h2>
                 <p className="text-slate-500 text-sm mb-6">Altere o rótulo e a descrição do campo.</p>
                 
-                <form onSubmit={(e) => {
+                <form key={editingField?.field.id || 'edit_field'} onSubmit={(e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
                   const label = formData.get('label') as string;
@@ -4004,7 +4028,7 @@ export default function App() {
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingTrack ? 'Editar Esteira' : 'Nova Esteira'}</h2>
                 <p className="text-slate-500 text-sm mb-6">{editingTrack ? 'Atualize o nome da esteira.' : 'Adicione uma nova esteira operacional.'}</p>
                 
-                <form onSubmit={(e) => {
+                <form key={editingTrack?.id || 'new_track'} onSubmit={(e) => {
                   e.preventDefault();
                   const formData = new FormData(e.currentTarget);
                   const name = formData.get('name') as string;
@@ -4087,7 +4111,7 @@ export default function App() {
                 >
                     <div className="p-8">
                         <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingRole ? 'Editar Perfil' : 'Novo Perfil'}</h2>
-                        <form onSubmit={handleAddRole} className="space-y-6">
+                        <form key={editingRole?.id || 'new_role'} onSubmit={handleAddRole} className="space-y-6">
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Nome do Perfil</label>
                                 <input name="name" defaultValue={editingRole?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
