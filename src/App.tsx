@@ -30,7 +30,8 @@ import {
   PlusCircle,
   ClipboardCheck,
   Download,
-  FileText
+  FileText,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { 
@@ -319,11 +320,29 @@ export default function App() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [requestSubTab, setRequestSubTab] = useState<'new' | 'my'>('new');
   const [editingRequest, setEditingRequest] = useState<AccessRequest | null>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [analystsLimit, setAnalystsLimit] = useState(20);
   const [hasMoreAnalysts, setHasMoreAnalysts] = useState(true);
+
+  const getAnalystDisplayName = (analyst: any) => {
+    if (!analyst) return 'Analista Desconhecido';
+    return analyst.name || analyst.nome || analyst.email_interfile || analyst.email || 'Sem Nome';
+  };
+
+  const getAnalystInitials = (analyst: any) => {
+    const name = getAnalystDisplayName(analyst);
+    return name.split(' ').slice(0, 2).map((n: string) => n[0]?.toUpperCase()).join('');
+  };
+
+  const getAnalystEmail = (analyst: any) => {
+    if (!analyst) return '';
+    return analyst.email_interfile || analyst.email || '';
+  };
 
   // Debounce search query
   useEffect(() => {
@@ -499,7 +518,11 @@ export default function App() {
         if (data) {
           const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
           // Sort by name locally as startAt/endAt might return unsorted results if not careful
-          const sortedList = list.sort((a, b) => a.name.localeCompare(b.name));
+          const sortedList = list.sort((a, b) => {
+            const nameA = a.name || a.nome || a.email || a.email_interfile || '';
+            const nameB = b.name || b.nome || b.email || b.email_interfile || '';
+            return nameA.localeCompare(nameB);
+          });
           setAnalysts(sortedList);
           setHasMoreAnalysts(list.length >= analystsLimit);
         } else {
@@ -550,8 +573,17 @@ export default function App() {
 
   const filteredAnalysts = useMemo(() => {
     return analysts.filter(a => {
-      const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           a.track.toLowerCase().includes(searchQuery.toLowerCase());
+      const searchLower = searchQuery.toLowerCase();
+      
+      // Search across all defined fields for this analyst
+      const matchesSearch = analystFields.some(field => {
+        const val = a[field.id];
+        return val && typeof val === 'string' && val.toLowerCase().includes(searchLower);
+      }) || 
+      // Fallback to name/email/track if they exist
+      (a.name && a.name.toLowerCase().includes(searchLower)) ||
+      (a.email && a.email.toLowerCase().includes(searchLower)) ||
+      (a.track && a.track.toLowerCase().includes(searchLower));
       
       const matchesStatus = analystStatusFilter === 'all' || 
                            (analystStatusFilter === 'active' && !a.deactivatedAt) ||
@@ -559,7 +591,7 @@ export default function App() {
       
       return matchesSearch && matchesStatus;
     });
-  }, [analysts, searchQuery, analystStatusFilter]);
+  }, [analysts, searchQuery, analystStatusFilter, analystFields]);
 
   const stats = useMemo(() => {
     const totalAccesses = accesses.length;
@@ -754,7 +786,7 @@ export default function App() {
           await logAction(
             user.email, 
             'EDIT_ANALYST', 
-            `Editou dados do analista: ${analystData.name || editingAnalyst.name}`, 
+            `Editou dados do analista: ${getAnalystDisplayName(analystData) || getAnalystDisplayName(editingAnalyst)}`, 
             'Analistas',
             editingAnalyst,
             { ...editingAnalyst, ...analystData }
@@ -767,7 +799,7 @@ export default function App() {
       const createdAt = new Date().toISOString();
       await set(ref(db, `analysts/${analystId}`), { ...analystData, id: analystId, createdAt });
       if (user?.email) {
-        await logAction(user.email, 'CREATE_ANALYST', `Criou analista: ${analystData.name}`, 'Analistas');
+        await logAction(user.email, 'CREATE_ANALYST', `Criou analista: ${getAnalystDisplayName(analystData)}`, 'Analistas');
       }
     }
 
@@ -869,7 +901,7 @@ export default function App() {
       await set(ref(db, `requests/${requestId}`), request);
       
       if (user?.email) {
-        await logAction(user.email, editingRequest ? 'RESUBMIT_REQUEST' : 'CREATE_REQUEST', `${editingRequest ? 'Reenviou' : 'Criou'} solicitação ${requestNumber} para o analista ${analystData.name}`, 'Solicitações');
+        await logAction(user.email, editingRequest ? 'RESUBMIT_REQUEST' : 'CREATE_REQUEST', `${editingRequest ? 'Reenviou' : 'Criou'} solicitação ${requestNumber} para o analista ${getAnalystDisplayName(analystData)}`, 'Solicitações');
       }
       
       setSelectedSystemsInForm([]);
@@ -970,7 +1002,7 @@ export default function App() {
       await logAction(
         user.email, 
         'APPROVE_REQUEST', 
-        `Aprovou solicitação ${request.requestNumber} para o analista ${analystData.name}`, 
+        `Aprovou solicitação ${request.requestNumber} para o analista ${getAnalystDisplayName(analystData)}`, 
         'Solicitações',
         request,
         analystData
@@ -1032,7 +1064,7 @@ export default function App() {
     setConfirmModal({
       isOpen: true,
       title: 'Desligar Analista',
-      message: `Tem certeza que deseja desligar o analista ${analyst.name}? Após o desligamento, os dados não poderão ser alterados nem excluídos.`,
+      message: `Tem certeza que deseja desligar o analista ${getAnalystDisplayName(analyst)}? Após o desligamento, os dados não poderão ser alterados nem excluídos.`,
       confirmText: 'Desligar',
       confirmColor: 'bg-rose-600',
       onConfirm: async () => {
@@ -1041,7 +1073,7 @@ export default function App() {
             deactivatedAt: new Date().toISOString() 
           });
           if (user?.email) {
-            await logAction(user.email, 'DEACTIVATE_ANALYST', `Desligou o analista: ${analyst.name}`, 'Analistas');
+            await logAction(user.email, 'DEACTIVATE_ANALYST', `Desligou o analista: ${getAnalystDisplayName(analyst)}`, 'Analistas');
           }
           setConfirmModal(prev => ({ ...prev, isOpen: false }));
           showToast("Analista desligado com sucesso!", "success");
@@ -1102,7 +1134,7 @@ export default function App() {
         try {
           await remove(ref(db, `analysts/${id}`));
           if (user?.email) {
-            await logAction(user.email, 'DELETE_ANALYST', `Excluiu o analista: ${analyst.name}`, 'Analistas');
+            await logAction(user.email, 'DELETE_ANALYST', `Excluiu o analista: ${getAnalystDisplayName(analyst)}`, 'Analistas');
           }
           const accessesToRemove = accesses.filter(a => a.analystId === id);
           for (const access of accessesToRemove) {
@@ -1445,6 +1477,161 @@ export default function App() {
     document.body.removeChild(link);
   };
 
+  const generateTemplate = () => {
+    const headers = ['Nome Sistema', 'Status', ...analystFields.map(f => f.label)];
+    const csvContent = "\ufeff" + headers.join(';') + '\r\n';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'modelo_importacao_analistas.csv';
+    link.click();
+  };
+
+  const parseCSVRow = (row: string, separator = ';') => {
+      const result = [];
+      let insideQuotes = false;
+      let currentValue = '';
+      for (let i = 0; i < row.length; i++) {
+          const char = row[i];
+          if (char === '"') {
+              if (insideQuotes && row[i+1] === '"') {
+                  currentValue += '"';
+                  i++;
+              } else {
+                  insideQuotes = !insideQuotes;
+              }
+          } else if (char === separator && !insideQuotes) {
+              result.push(currentValue);
+              currentValue = '';
+          } else {
+              currentValue += char;
+          }
+      }
+      result.push(currentValue);
+      return result;
+  };
+
+  const handleImport = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/);
+      if (lines.length < 2) {
+        showToast("Arquivo vazio ou sem dados.", "error");
+        setIsImporting(false);
+        return;
+      }
+      
+      const separator = lines[0].includes(';') ? ';' : ',';
+      const headers = parseCSVRow(lines[0], separator).map(h => h.trim().replace(/^\uFEFF/, '').replace(/^"|"$/g, ''));
+      
+      const updates: any = {};
+      const newAnalysts: any = {};
+      const newAccesses: any = {};
+      let validRows = 0;
+      
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const values = parseCSVRow(lines[i], separator);
+        const rowData: any = {};
+        headers.forEach((h, index) => {
+          rowData[h] = values[index]?.trim().replace(/^"|"$/g, '') || '';
+        });
+        
+        const analystData: any = {};
+        analystFields.forEach(f => {
+          const val = rowData[f.label];
+          if (val !== undefined && val !== '') {
+            analystData[f.id] = val;
+          }
+        });
+        
+        const emailField = analystFields.find(f => f.type === 'email' || f.id === 'email' || f.id === 'email_interfile' || f.label.toLowerCase().includes('email') || f.label.toLowerCase().includes('e-mail'));
+        const emailKey = emailField?.id || 'email_interfile';
+        const emailVal = analystData[emailKey] || analystData.email || analystData.email_interfile;
+        
+        if (!emailVal) continue; // Email is required
+        
+        validRows++;
+        const email = emailVal.toLowerCase();
+        let analystId = analysts.find(a => {
+           const aEmail = a[emailKey] || a.email || a.email_interfile;
+           return aEmail && typeof aEmail === 'string' && aEmail.toLowerCase() === email;
+        })?.id;
+        
+        if (!analystId) {
+          const existingNew = Object.entries(newAnalysts).find(([id, a]: [string, any]) => {
+             const aEmail = a[emailKey] || a.email || a.email_interfile;
+             return aEmail && typeof aEmail === 'string' && aEmail.toLowerCase() === email;
+          });
+          if (existingNew) {
+            analystId = existingNew[0];
+          } else {
+            analystId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
+            newAnalysts[analystId] = {
+              ...analystData,
+              id: analystId,
+              createdAt: new Date().toISOString(),
+              approvedBy: user?.uid || '',
+              approvedByName: currentUserData?.name || user?.email || 'Importação em Massa'
+            };
+          }
+        } else {
+           const existingAnalyst = analysts.find(a => a.id === analystId);
+           updates[`analysts/${analystId}`] = { ...existingAnalyst, ...analystData };
+        }
+        
+        const systemName = rowData['Nome Sistema'];
+        const statusStr = rowData['Status'];
+        
+        if (systemName) {
+          const system = systems.find(s => s.name.toLowerCase() === systemName.toLowerCase());
+          if (system) {
+            const validStatuses = ['Ok', 'Pendente', 'Acesso perdido'];
+            const statusMatch = validStatuses.find(vs => vs.toLowerCase() === statusStr?.toLowerCase());
+            const status = statusMatch || 'Pendente';
+            
+            newAccesses[`${analystId}_${system.id}`] = {
+              analystId,
+              systemId: system.id,
+              status,
+              updatedAt: new Date().toISOString()
+            };
+          }
+        }
+      }
+      
+      const finalUpdates: any = { ...updates };
+      Object.keys(newAnalysts).forEach(id => {
+        finalUpdates[`analysts/${id}`] = newAnalysts[id];
+      });
+      Object.keys(newAccesses).forEach(key => {
+        finalUpdates[`accesses/${key}`] = newAccesses[key];
+      });
+      
+      if (Object.keys(finalUpdates).length > 0) {
+        await update(ref(db), finalUpdates);
+        if (user?.email) {
+          await logAction(user.email, 'MASS_IMPORT', `Importou/Atualizou ${Object.keys(newAnalysts).length + Object.keys(updates).length} analistas e ${Object.keys(newAccesses).length} acessos.`, 'Analistas');
+        }
+        showToast("Importação concluída com sucesso!", "success");
+        setIsImportModalOpen(false);
+        setImportFile(null);
+      } else {
+        if (validRows === 0) {
+          showToast("Nenhum dado válido encontrado. Verifique se a coluna de E-mail está preenchida corretamente.", "error");
+        } else {
+          showToast("Nenhum sistema válido encontrado para os analistas informados.", "error");
+        }
+      }
+    } catch (err: any) {
+      console.error("Erro na importação:", err);
+      showToast("Erro na importação: " + err.message, "error");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleExportData = async (type: 'analysts' | 'systems' | 'users' | 'tracks' | 'accesses' | 'logs') => {
     if (type === 'logs' && !hasPermission('extract_logs')) return;
     if (type !== 'logs' && !hasPermission('extract_data')) return;
@@ -1577,8 +1764,8 @@ export default function App() {
                 if (header === 'Nome Sistema') row[header] = system?.name || 'Desconhecido';
                 else if (header === 'Status') row[header] = acc.status;
                 else if (header === 'Última Atualização') row[header] = acc.updatedAt;
-                else if (header === 'Nome') row[header] = analyst.name || 'Desconhecido';
-                else if (header === 'Email') row[header] = analyst.email || '';
+                else if (header === 'Nome') row[header] = getAnalystDisplayName(analyst);
+                else if (header === 'Email') row[header] = getAnalystEmail(analyst);
                 else if (header === 'Esteira') row[header] = analyst.track || '';
                 else if (header === 'Data de Criação') row[header] = analyst.createdAt || '';
                 else if (header === 'Data de Desligamento') row[header] = analyst.deactivatedAt || '';
@@ -1935,13 +2122,22 @@ export default function App() {
               </div>
             )}
             {activeTab === 'analysts' && !selectedAnalyst && canManageAnalysts && (
-              <button 
-                onClick={() => setIsAddingAnalyst(true)}
-                className="bg-indigo-600 text-white p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Novo Analista</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="bg-white text-slate-700 border border-slate-200 p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="hidden sm:inline">Importar</span>
+                </button>
+                <button 
+                  onClick={() => setIsAddingAnalyst(true)}
+                  className="bg-indigo-600 text-white p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Novo Analista</span>
+                </button>
+              </div>
             )}
             {activeTab === 'systems' && canManageSystems && (
               <button 
@@ -2239,11 +2435,11 @@ export default function App() {
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
-                                  {analyst.name.split(' ').map((n, i) => <span key={i}>{n[0]}</span>)}
+                                  {getAnalystInitials(analyst)}
                                 </div>
                                 <div>
-                                  <p className="text-sm font-bold text-slate-800">{analyst.name}</p>
-                                  <p className="text-xs text-slate-400">{analyst.email}</p>
+                                  <p className="text-sm font-bold text-slate-800">{getAnalystDisplayName(analyst)}</p>
+                                  <p className="text-xs text-slate-400">{getAnalystEmail(analyst)}</p>
                                   {analyst.deactivatedAt && (
                                     <p className="text-[10px] font-bold text-rose-500 uppercase mt-1">Desligado em: {new Date(analyst.deactivatedAt).toLocaleDateString('pt-BR')}</p>
                                   )}
@@ -2358,11 +2554,11 @@ export default function App() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
-                              {analyst.name.split(' ').map((n, i) => <span key={i}>{n[0]}</span>)}
+                              {getAnalystInitials(analyst)}
                             </div>
                             <div>
-                              <p className="text-sm font-bold text-slate-800">{analyst.name}</p>
-                              <p className="text-xs text-slate-400">{analyst.email}</p>
+                              <p className="text-sm font-bold text-slate-800">{getAnalystDisplayName(analyst)}</p>
+                              <p className="text-xs text-slate-400">{getAnalystEmail(analyst)}</p>
                               {analyst.deactivatedAt && (
                                 <p className="text-[10px] font-bold text-rose-500 uppercase mt-1">Desligado em: {new Date(analyst.deactivatedAt).toLocaleDateString('pt-BR')}</p>
                               )}
@@ -2883,11 +3079,11 @@ export default function App() {
                           <div className="flex items-center justify-between mb-4">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm">
-                                {request.analystData.name?.split(' ').map((n: string, i: number) => <span key={i}>{n[0]}</span>)}
+                                {getAnalystInitials(request.analystData)}
                               </div>
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <h3 className="font-bold text-slate-800 text-sm truncate max-w-[150px]">{request.analystData.name}</h3>
+                                  <h3 className="font-bold text-slate-800 text-sm truncate max-w-[150px]">{getAnalystDisplayName(request.analystData)}</h3>
                                   <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{request.requestNumber}</span>
                                 </div>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{new Date(request.requestedAt).toLocaleDateString('pt-BR')}</p>
@@ -2968,11 +3164,11 @@ export default function App() {
                       <div key={request.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
                         <div className="flex items-center gap-3 mb-4">
                           <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-                            {request.analystData.name?.split(' ').map((n: string, i: number) => <span key={i}>{n[0]}</span>)}
+                            {getAnalystInitials(request.analystData)}
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-slate-800 truncate">{request.analystData.name}</h3>
+                              <h3 className="font-bold text-slate-800 truncate">{getAnalystDisplayName(request.analystData)}</h3>
                               <span className="text-[9px] font-mono bg-indigo-50 px-1 py-0.5 rounded text-indigo-500">{request.requestNumber}</span>
                             </div>
                             <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{new Date(request.requestedAt).toLocaleDateString('pt-BR')}</p>
@@ -3019,11 +3215,11 @@ export default function App() {
                         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
-                              {selectedRequestForApproval.analystData.name?.split(' ').map((n: string, i: number) => <span key={i}>{n[0]}</span>)}
+                              {getAnalystInitials(selectedRequestForApproval.analystData)}
                             </div>
                             <div>
-                              <h3 className="font-bold text-slate-800">{selectedRequestForApproval.analystData.name}</h3>
-                              <p className="text-xs text-slate-500">{selectedRequestForApproval.analystData.email}</p>
+                              <h3 className="font-bold text-slate-800">{getAnalystDisplayName(selectedRequestForApproval.analystData)}</h3>
+                              <p className="text-xs text-slate-500">{getAnalystEmail(selectedRequestForApproval.analystData)}</p>
                             </div>
                           </div>
                           <button 
@@ -3680,6 +3876,76 @@ export default function App() {
 
       {/* Modals */}
       <AnimatePresence>
+        {isImportModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-slate-800">Importação em Massa</h2>
+                  <button onClick={() => setIsImportModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+                
+                <p className="text-slate-500 text-sm mb-6">
+                  Baixe o modelo CSV, preencha com os dados dos analistas e seus acessos, e faça o upload para criar ou atualizar em massa.
+                </p>
+
+                <div className="space-y-6">
+                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-8 h-8 text-indigo-600" />
+                      <div>
+                        <h3 className="text-sm font-bold text-indigo-900">Modelo CSV</h3>
+                        <p className="text-xs text-indigo-600/70">Planilha com as colunas corretas</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={generateTemplate}
+                      className="px-4 py-2 bg-white text-indigo-600 text-sm font-bold rounded-xl shadow-sm hover:bg-indigo-50 transition-colors"
+                    >
+                      Baixar
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Arquivo Preenchido</label>
+                    <input 
+                      type="file" 
+                      accept=".csv"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" 
+                    />
+                  </div>
+
+                  <button 
+                    onClick={() => importFile && handleImport(importFile)}
+                    disabled={!importFile || isImporting}
+                    className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isImporting ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Importando...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-5 h-5" />
+                        Processar Importação
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {(isAddingAnalyst || editingAnalyst) && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <motion.div 
