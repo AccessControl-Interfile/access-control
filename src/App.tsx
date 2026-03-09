@@ -3684,7 +3684,7 @@ export default function App() {
               </div>
               
               <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                <form id="analyst-form" onSubmit={handleAddAnalyst} className="space-y-8">
+                <form id="analyst-form" key={editingAnalyst?.id || 'new_analyst'} onSubmit={handleAddAnalyst} className="space-y-8">
                   <div>
                     <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Dados do Analista</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3731,8 +3731,9 @@ export default function App() {
                             </label>
                             <input 
                               name={field.id} 
-                              defaultValue={editingAnalyst?.[field.id]} 
+                              defaultValue={editingAnalyst?.[field.id] || ''} 
                               disabled={!canManageAnalysts} 
+                              autoComplete="off"
                               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                               placeholder={field.description}
                             />
@@ -3862,7 +3863,7 @@ export default function App() {
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingSystem ? 'Editar Sistema' : 'Novo Sistema'}</h2>
                 <p className="text-slate-500 text-sm mb-6">{editingSystem ? 'Atualize os dados do sistema.' : 'Adicione uma nova ferramenta ao catálogo da operação.'}</p>
                 
-                <form onSubmit={handleAddSystem} className="space-y-4">
+                <form onSubmit={handleAddSystem} key={editingSystem?.id || 'new_system'} className="space-y-4">
                   {systemFields.map(field => {
                     if (field.id === 'name') {
                       return (
@@ -3892,7 +3893,8 @@ export default function App() {
                         </label>
                         <input 
                           name={field.id} 
-                          defaultValue={editingSystem?.[field.id]} 
+                          defaultValue={editingSystem?.[field.id] || ''} 
+                          autoComplete="off"
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                           placeholder={field.description}
                         />
