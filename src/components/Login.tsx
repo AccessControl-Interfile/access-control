@@ -4,7 +4,6 @@ import { auth } from '../lib/firebase';
 import { logAction } from '../lib/auditLogger';
 import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
-import Footer from './Footer';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -73,10 +72,17 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
-      <div className="flex-1 flex items-center justify-center w-full">
-        <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden">
-          <div className="p-8 md:p-12">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Background ambient glow for better glassmorphism visibility */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-400/20 rounded-full blur-[120px] pointer-events-none"></div>
+      
+      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md relative z-10">
+        <div className="relative w-full">
+          {/* Card glow */}
+          <div className="absolute inset-0 bg-indigo-500/30 blur-3xl rounded-3xl z-0 pointer-events-none"></div>
+          
+          <div className="relative bg-white/40 backdrop-blur-xl border border-slate-200/50 rounded-3xl shadow-xl w-full overflow-hidden z-10">
+            <div className="p-8 md:p-12">
             <div className="flex justify-center mb-8">
               <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
                 <Lock className="w-8 h-8 text-white" />
@@ -105,7 +111,7 @@ export default function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     required 
                     disabled={showPasswordInput}
-                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
+                    className="w-full pl-12 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all disabled:opacity-60 text-slate-900 placeholder-slate-400" 
                     placeholder="seu@email.com"
                   />
                 </div>
@@ -116,7 +122,7 @@ export default function Login() {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                 >
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Senha</label>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 mt-4">Senha</label>
                   <div className="relative">
                     <Lock className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                     <input 
@@ -125,7 +131,7 @@ export default function Login() {
                       onChange={(e) => setPassword(e.target.value)}
                       required 
                       autoFocus
-                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                      className="w-full pl-12 pr-4 py-3 bg-white/50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all text-slate-900 placeholder-slate-400" 
                       placeholder="••••••••"
                     />
                   </div>
@@ -135,7 +141,7 @@ export default function Login() {
               <button 
                 type="submit" 
                 disabled={loading}
-                className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full py-4 mt-6 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed cursor-pointer"
               >
                 {loading ? (
                   <>
@@ -156,21 +162,25 @@ export default function Login() {
                 <button 
                   type="button"
                   onClick={() => { setShowPasswordInput(false); setError(''); }}
-                  className="w-full py-2 text-slate-400 hover:text-indigo-600 text-sm font-medium transition-colors cursor-pointer"
+                  className="w-full py-2 mt-2 text-slate-400 hover:text-indigo-600 text-sm font-medium transition-colors cursor-pointer"
                 >
                   Voltar e alterar e-mail
                 </button>
               )}
             </form>
           </div>
-          <div className="bg-slate-50 p-6 text-center border-t border-slate-100">
-            <p className="text-xs text-slate-400">
-              Não tem uma conta? Solicite acesso ao administrador.
-            </p>
-          </div>
+        </div>
+        </div>
+        
+        <div className="mt-10 text-center flex flex-col items-center gap-6">
+          <p className="text-sm font-medium text-slate-500">
+            Não tem uma conta? Solicite acesso ao administrador.
+          </p>
+          <p className="text-[10px] font-medium text-slate-400 tracking-wide">
+            © Developed by Lucas Cantão Gaspar de Souza
+          </p>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }
