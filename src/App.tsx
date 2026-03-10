@@ -332,6 +332,7 @@ export default function App() {
   const [massDeactivateField, setMassDeactivateField] = useState<string>('');
   const [massDeactivateFile, setMassDeactivateFile] = useState<File | null>(null);
   const [isMassDeactivating, setIsMassDeactivating] = useState(false);
+  const [isAnalystMenuOpen, setIsAnalystMenuOpen] = useState(false);
 
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('darkMode');
@@ -426,6 +427,7 @@ export default function App() {
   };
 
   const [analystStatusFilter, setAnalystStatusFilter] = useState<'all' | 'active' | 'deactivated'>('active');
+  const [analystAccessStatusFilter, setAnalystAccessStatusFilter] = useState<'all' | 'ok' | 'pending' | 'lost' | 'none'>('all');
   const [logExportStartDate, setLogExportStartDate] = useState('');
   const [logExportEndDate, setLogExportEndDate] = useState('');
   const [logExportAllTime, setLogExportAllTime] = useState(true);
@@ -616,7 +618,7 @@ export default function App() {
 
     setIsLoading(false);
     return () => unsubscribes.forEach(unsub => unsub());
-  }, [analystsLimit, debouncedSearchQuery, analystStatusFilter]);
+  }, [analystsLimit, debouncedSearchQuery, analystStatusFilter, analystAccessStatusFilter]);
 
   const filteredAnalysts = useMemo(() => {
     const filtered = allAnalysts.filter(a => {
@@ -635,8 +637,22 @@ export default function App() {
       const matchesStatus = analystStatusFilter === 'all' || 
                            (analystStatusFilter === 'active' && !a.deactivatedAt) ||
                            (analystStatusFilter === 'deactivated' && !!a.deactivatedAt);
+                           
+      let matchesAccessStatus = true;
+      if (analystAccessStatusFilter !== 'all') {
+        const analystAccesses = accesses.filter(acc => acc.analystId === a.id);
+        if (analystAccessStatusFilter === 'none') {
+          matchesAccessStatus = analystAccesses.length === 0;
+        } else if (analystAccessStatusFilter === 'ok') {
+          matchesAccessStatus = analystAccesses.length > 0 && analystAccesses.every(acc => acc.status === 'Ok');
+        } else if (analystAccessStatusFilter === 'pending') {
+          matchesAccessStatus = analystAccesses.some(acc => acc.status === 'Pendente');
+        } else if (analystAccessStatusFilter === 'lost') {
+          matchesAccessStatus = analystAccesses.some(acc => acc.status === 'Acesso perdido');
+        }
+      }
       
-      return matchesSearch && matchesStatus;
+      return matchesSearch && matchesStatus && matchesAccessStatus;
     });
     
     // Sort by name
@@ -647,7 +663,7 @@ export default function App() {
     });
     
     return filtered;
-  }, [allAnalysts, searchQuery, analystStatusFilter, analystFields]);
+  }, [allAnalysts, searchQuery, analystStatusFilter, analystAccessStatusFilter, analystFields, accesses]);
 
   const paginatedAnalysts = useMemo(() => {
     return filteredAnalysts.slice(0, analystsLimit);
@@ -2270,15 +2286,28 @@ export default function App() {
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             {activeTab === 'analysts' && !selectedAnalyst && (
-              <select 
-                value={analystStatusFilter}
-                onChange={(e) => setAnalystStatusFilter(e.target.value as any)}
-                className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
-              >
-                <option value="active">Ativos</option>
-                <option value="deactivated">Desligados</option>
-                <option value="all">Todos</option>
-              </select>
+              <>
+                <select 
+                  value={analystAccessStatusFilter}
+                  onChange={(e) => setAnalystAccessStatusFilter(e.target.value as any)}
+                  className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer hidden sm:block"
+                >
+                  <option value="all">Qualquer acesso</option>
+                  <option value="ok">Tudo Ok</option>
+                  <option value="pending">Com Pendências</option>
+                  <option value="lost">Acesso Perdido</option>
+                  <option value="none">Sem Acessos</option>
+                </select>
+                <select 
+                  value={analystStatusFilter}
+                  onChange={(e) => setAnalystStatusFilter(e.target.value as any)}
+                  className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
+                >
+                  <option value="active">Ativos</option>
+                  <option value="deactivated">Desligados</option>
+                  <option value="all">Todos</option>
+                </select>
+              </>
             )}
             {(activeTab === 'analysts' || activeTab === 'systems') && !selectedAnalyst && (
               <div className="relative">
@@ -2293,28 +2322,56 @@ export default function App() {
               </div>
             )}
             {activeTab === 'analysts' && !selectedAnalyst && canManageAnalysts && (
-              <div className="flex items-center gap-2">
+              <div className="relative">
                 <button 
-                  onClick={() => setIsMassDeactivateModalOpen(true)}
-                  className="bg-white text-red-600 border border-red-200 p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-red-50 transition-colors shadow-sm"
+                  onClick={() => setIsAnalystMenuOpen(!isAnalystMenuOpen)}
+                  className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors flex items-center justify-center"
+                  title="Ações do Analista"
                 >
-                  <UserMinus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Desligamento</span>
+                  <MoreVertical className="w-5 h-5" />
                 </button>
-                <button 
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="bg-white text-slate-700 border border-slate-200 p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span className="hidden sm:inline">Importar</span>
-                </button>
-                <button 
-                  onClick={() => setIsAddingAnalyst(true)}
-                  className="bg-indigo-600 text-white p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Novo Analista</span>
-                </button>
+                
+                <AnimatePresence>
+                  {isAnalystMenuOpen && (
+                    <>
+                      <div 
+                        className="fixed inset-0 z-40" 
+                        onClick={() => setIsAnalystMenuOpen(false)}
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden"
+                      >
+                        <div className="p-2 flex flex-col gap-1">
+                          <button 
+                            onClick={() => { setIsAddingAnalyst(true); setIsAnalystMenuOpen(false); }}
+                            className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Novo Analista
+                          </button>
+                          <button 
+                            onClick={() => { setIsImportModalOpen(true); setIsAnalystMenuOpen(false); }}
+                            className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2"
+                          >
+                            <Upload className="w-4 h-4" />
+                            Importar
+                          </button>
+                          <div className="h-px bg-slate-100 my-1" />
+                          <button 
+                            onClick={() => { setIsMassDeactivateModalOpen(true); setIsAnalystMenuOpen(false); }}
+                            className="w-full text-left px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-2"
+                          >
+                            <UserMinus className="w-4 h-4" />
+                            Desligamento
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
             )}
             {activeTab === 'systems' && canManageSystems && (
