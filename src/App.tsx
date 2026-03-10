@@ -31,7 +31,10 @@ import {
   ClipboardCheck,
   Download,
   FileText,
-  Upload
+  Upload,
+  UserMinus,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { 
@@ -324,11 +327,32 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  
+  const [isMassDeactivateModalOpen, setIsMassDeactivateModalOpen] = useState(false);
+  const [massDeactivateField, setMassDeactivateField] = useState<string>('');
+  const [massDeactivateFile, setMassDeactivateFile] = useState<File | null>(null);
+  const [isMassDeactivating, setIsMassDeactivating] = useState(false);
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    if (saved !== null) {
+      return saved === 'true';
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', isDarkMode.toString());
+  }, [isDarkMode]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [analystsLimit, setAnalystsLimit] = useState(20);
-  const [hasMoreAnalysts, setHasMoreAnalysts] = useState(true);
 
   const getAnalystDisplayName = (analyst: any) => {
     if (!analyst) return 'Analista Desconhecido';
@@ -540,10 +564,8 @@ export default function App() {
             return nameA.localeCompare(nameB);
           });
           setAnalysts(sortedList);
-          setHasMoreAnalysts(list.length >= analystsLimit);
         } else {
           setAnalysts([]);
-          setHasMoreAnalysts(false);
         }
       }),
       onValue(refs.analysts, (snapshot) => {
@@ -594,10 +616,10 @@ export default function App() {
 
     setIsLoading(false);
     return () => unsubscribes.forEach(unsub => unsub());
-  }, [analystsLimit, debouncedSearchQuery]);
+  }, [analystsLimit, debouncedSearchQuery, analystStatusFilter]);
 
   const filteredAnalysts = useMemo(() => {
-    return analysts.filter(a => {
+    const filtered = allAnalysts.filter(a => {
       const searchLower = searchQuery.toLowerCase();
       
       // Search across all defined fields for this analyst
@@ -616,18 +638,39 @@ export default function App() {
       
       return matchesSearch && matchesStatus;
     });
-  }, [analysts, searchQuery, analystStatusFilter, analystFields]);
+    
+    // Sort by name
+    filtered.sort((a, b) => {
+      const nameA = a.name || a.nome || a.email || a.email_interfile || '';
+      const nameB = b.name || b.nome || b.email || b.email_interfile || '';
+      return nameA.localeCompare(nameB);
+    });
+    
+    return filtered;
+  }, [allAnalysts, searchQuery, analystStatusFilter, analystFields]);
+
+  const paginatedAnalysts = useMemo(() => {
+    return filteredAnalysts.slice(0, analystsLimit);
+  }, [filteredAnalysts, analystsLimit]);
+  
+  const hasMoreAnalysts = filteredAnalysts.length > analystsLimit;
 
   const stats = useMemo(() => {
-    const totalAccesses = accesses.length;
-    const okCount = accesses.filter(a => a.status === 'Ok').length;
-    const pendingCount = accesses.filter(a => a.status === 'Pendente').length;
-    const lostCount = accesses.filter(a => a.status === 'Acesso perdido').length;
+    // Filter out accesses belonging to deactivated analysts
+    const activeAccesses = accesses.filter(acc => {
+      const analyst = allAnalysts.find(a => a.id === acc.analystId);
+      return analyst && !analyst.deactivatedAt;
+    });
+
+    const totalAccesses = activeAccesses.length;
+    const okCount = activeAccesses.filter(a => a.status === 'Ok').length;
+    const pendingCount = activeAccesses.filter(a => a.status === 'Pendente').length;
+    const lostCount = activeAccesses.filter(a => a.status === 'Acesso perdido').length;
 
     // Group by Track (Access-First approach for maximum reliability)
     const trackGroups: Record<string, any> = {};
     
-    accesses.forEach(acc => {
+    activeAccesses.forEach(acc => {
       if (acc.status === 'Ok') return;
       
       const analyst = allAnalysts.find(a => a.id === acc.analystId);
@@ -665,7 +708,7 @@ export default function App() {
     // Group by System (Access-First approach)
     const systemGroups: Record<string, any> = {};
     
-    accesses.forEach(acc => {
+    activeAccesses.forEach(acc => {
       if (acc.status === 'Ok') return;
       
       const system = systems.find(s => s.id === acc.systemId);
@@ -703,7 +746,7 @@ export default function App() {
     const bySystem = Object.values(systemGroups);
 
     return { totalAccesses, okCount, pendingCount, lostCount, byTrack, bySystem };
-  }, [accesses, analysts, systems, tracks]);
+  }, [accesses, allAnalysts, systems, tracks]);
 
   const handleUpdateAccess = (analystId: string, systemId: string, status: AccessStatus) => {
     if (!canManageAccess) return;
@@ -1660,6 +1703,99 @@ export default function App() {
     }
   };
 
+  const generateDeactivateTemplate = () => {
+    if (!massDeactivateField) {
+      showToast("Selecione um campo de referência primeiro.", "error");
+      return;
+    }
+    const field = analystFields.find(f => f.id === massDeactivateField);
+    const headers = [field?.label || massDeactivateField];
+    const csvContent = "\ufeff" + headers.join(';') + '\r\n';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `modelo_desligamento_${massDeactivateField}.csv`;
+    link.click();
+  };
+
+  const handleMassDeactivate = async (file: File) => {
+    if (!massDeactivateField) {
+      showToast("Selecione um campo de referência primeiro.", "error");
+      return;
+    }
+
+    setIsMassDeactivating(true);
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/);
+      if (lines.length < 2) {
+        showToast("Arquivo vazio ou sem dados.", "error");
+        setIsMassDeactivating(false);
+        return;
+      }
+      
+      const separator = lines[0].includes(';') ? ';' : ',';
+      const headers = parseCSVRow(lines[0], separator).map(h => h.trim().replace(/^\uFEFF/, '').replace(/^"|"$/g, ''));
+      
+      const field = analystFields.find(f => f.id === massDeactivateField);
+      const targetHeader = field?.label || massDeactivateField;
+
+      if (!headers.includes(targetHeader)) {
+        showToast(`O arquivo deve conter a coluna "${targetHeader}".`, "error");
+        setIsMassDeactivating(false);
+        return;
+      }
+
+      const updates: any = {};
+      let validRows = 0;
+      let notFoundCount = 0;
+      
+      const allAnalystsSnapshot = await get(ref(db, 'analysts'));
+      const allAnalystsData = allAnalystsSnapshot.val() || {};
+      const allAnalystsList = Object.entries(allAnalystsData).map(([id, val]: [string, any]) => ({ ...val, id }));
+
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const values = parseCSVRow(lines[i], separator);
+        const rowData: any = {};
+        headers.forEach((h, index) => {
+          rowData[h] = values[index]?.trim().replace(/^"|"$/g, '') || '';
+        });
+        
+        const targetValue = rowData[targetHeader];
+        if (!targetValue) continue;
+
+        const analystToDeactivate = allAnalystsList.find(a => {
+          const val = a[massDeactivateField];
+          return val && val.toString().toLowerCase() === targetValue.toString().toLowerCase();
+        });
+
+        if (analystToDeactivate && !analystToDeactivate.deactivatedAt) {
+          updates[`analysts/${analystToDeactivate.id}/deactivatedAt`] = new Date().toISOString();
+          validRows++;
+        } else if (!analystToDeactivate) {
+          notFoundCount++;
+        }
+      }
+      
+      if (validRows > 0) {
+        await update(ref(db), updates);
+        await logAction('mass_deactivate', 'analysts', `Desligou ${validRows} analistas em massa usando ${targetHeader}`);
+        showToast(`${validRows} analistas desligados com sucesso!${notFoundCount > 0 ? ` (${notFoundCount} não encontrados)` : ''}`, "success");
+        setIsMassDeactivateModalOpen(false);
+        setMassDeactivateFile(null);
+        setMassDeactivateField('');
+      } else {
+        showToast(`Nenhum analista válido encontrado para desligamento.${notFoundCount > 0 ? ` (${notFoundCount} não encontrados)` : ''}`, "error");
+      }
+    } catch (err: any) {
+      console.error("Erro no desligamento em massa:", err);
+      showToast("Erro no desligamento em massa: " + err.message, "error");
+    } finally {
+      setIsMassDeactivating(false);
+    }
+  };
+
   const handleExportData = async (type: 'analysts' | 'systems' | 'users' | 'tracks' | 'accesses' | 'logs') => {
     if (type === 'logs' && !hasPermission('extract_logs')) return;
     if (type !== 'logs' && !hasPermission('extract_data')) return;
@@ -2126,6 +2262,13 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2 lg:gap-4">
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+              title={isDarkMode ? "Mudar para modo claro" : "Mudar para modo escuro"}
+            >
+              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             {activeTab === 'analysts' && !selectedAnalyst && (
               <select 
                 value={analystStatusFilter}
@@ -2151,6 +2294,13 @@ export default function App() {
             )}
             {activeTab === 'analysts' && !selectedAnalyst && canManageAnalysts && (
               <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsMassDeactivateModalOpen(true)}
+                  className="bg-white text-red-600 border border-red-200 p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-red-50 transition-colors shadow-sm"
+                >
+                  <UserMinus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Desligamento</span>
+                </button>
                 <button 
                   onClick={() => setIsImportModalOpen(true)}
                   className="bg-white text-slate-700 border border-slate-200 p-2 sm:px-4 sm:py-2 rounded-full text-xs lg:text-sm font-medium flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"
@@ -2263,7 +2413,6 @@ export default function App() {
                         data={dashboardViewMode === 'byTrack' ? stats.byTrack : stats.bySystem}
                         margin={{ top: 20, right: 10, left: 10, bottom: 0 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                         <XAxis 
                           dataKey="name" 
                           axisLine={false} 
@@ -2272,7 +2421,7 @@ export default function App() {
                           dy={10}
                         />
                         <Tooltip 
-                          cursor={{ fill: '#f8fafc' }}
+                          cursor={false}
                           contentStyle={{ 
                             borderRadius: '16px', 
                             border: '1px solid #e2e8f0',
@@ -2453,7 +2602,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {filteredAnalysts.map(analyst => {
+                      {paginatedAnalysts.map(analyst => {
                         const analystAccesses = accesses.filter(a => a.analystId === analyst.id);
                         const pending = analystAccesses.filter(a => a.status === 'Pendente').length;
                         const lost = analystAccesses.filter(a => a.status === 'Acesso perdido').length;
@@ -2572,7 +2721,7 @@ export default function App() {
 
                 {/* Mobile Card View */}
                 <div className="md:hidden divide-y divide-slate-100">
-                  {filteredAnalysts.map(analyst => {
+                  {paginatedAnalysts.map(analyst => {
                     const analystAccesses = accesses.filter(a => a.analystId === analyst.id);
                     const pending = analystAccesses.filter(a => a.status === 'Pendente').length;
                     const lost = analystAccesses.filter(a => a.status === 'Acesso perdido').length;
@@ -3965,6 +4114,99 @@ export default function App() {
                       <>
                         <Upload className="w-5 h-5" />
                         Processar Importação
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {isMassDeactivateModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-slate-800">Desligamento em Massa</h2>
+                  <button onClick={() => { setIsMassDeactivateModalOpen(false); setMassDeactivateFile(null); setMassDeactivateField(''); }} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+                    <X className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+                
+                <p className="text-slate-500 text-sm mb-6">
+                  Selecione o campo de referência, baixe o modelo CSV, preencha com os dados e faça o upload para desligar analistas em massa.
+                </p>
+
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Campo de Referência</label>
+                    <select
+                      value={massDeactivateField}
+                      onChange={(e) => setMassDeactivateField(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium text-slate-700"
+                    >
+                      <option value="">Selecione um campo...</option>
+                      {analystFields.map(f => (
+                        <option key={f.id} value={f.id}>{f.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className={`p-4 rounded-2xl border flex items-center justify-between transition-colors ${massDeactivateField ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100 opacity-50'}`}>
+                    <div className="flex items-center gap-3">
+                      <FileText className={`w-8 h-8 ${massDeactivateField ? 'text-indigo-600' : 'text-slate-400'}`} />
+                      <div>
+                        <h3 className={`text-sm font-bold ${massDeactivateField ? 'text-indigo-900' : 'text-slate-500'}`}>Modelo CSV</h3>
+                        <p className={`text-xs ${massDeactivateField ? 'text-indigo-600/70' : 'text-slate-400'}`}>Planilha com a coluna selecionada</p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={generateDeactivateTemplate}
+                      disabled={!massDeactivateField}
+                      className={`px-4 py-2 text-sm font-bold rounded-xl shadow-sm transition-colors ${massDeactivateField ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                    >
+                      Baixar
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Upload do Arquivo</label>
+                    <div className="relative">
+                      <input 
+                        type="file" 
+                        accept=".csv"
+                        onChange={(e) => setMassDeactivateFile(e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <div className={`w-full p-6 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-2 transition-colors ${massDeactivateFile ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 hover:border-indigo-400 bg-slate-50'}`}>
+                        <Upload className={`w-8 h-8 ${massDeactivateFile ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <span className={`text-sm font-medium ${massDeactivateFile ? 'text-indigo-900' : 'text-slate-500'}`}>
+                          {massDeactivateFile ? massDeactivateFile.name : 'Clique ou arraste o arquivo CSV'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => massDeactivateFile && handleMassDeactivate(massDeactivateFile)}
+                    disabled={!massDeactivateFile || !massDeactivateField || isMassDeactivating}
+                    className="w-full py-4 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isMassDeactivating ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Desligando...
+                      </>
+                    ) : (
+                      <>
+                        <UserMinus className="w-5 h-5" />
+                        Processar Desligamento
                       </>
                     )}
                   </button>
