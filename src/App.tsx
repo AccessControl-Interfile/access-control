@@ -310,6 +310,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'analysts' | 'systems' | 'dashboard' | 'settings' | 'request' | 'approvals' | 'extract'>('dashboard');
   const [dashboardViewMode, setDashboardViewMode] = useState<'byTrack' | 'bySystem'>('byTrack');
   const [analysts, setAnalysts] = useState<Analyst[]>([]);
+  const [allAnalysts, setAllAnalysts] = useState<Analyst[]>([]);
   const [systems, setSystems] = useState<System[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [analystFields, setAnalystFields] = useState<FieldDefinition[]>(INITIAL_ANALYST_FIELDS);
@@ -342,6 +343,21 @@ export default function App() {
   const getAnalystEmail = (analyst: any) => {
     if (!analyst) return '';
     return analyst.email_interfile || analyst.email || '';
+  };
+
+  const getAnalystTrack = (analyst: any) => {
+    if (!analyst) return '';
+    if (analyst.track) return analyst.track;
+    if (analyst.esteira) return analyst.esteira;
+    if (analyst.Esteira) return analyst.Esteira;
+    
+    const trackKey = Object.keys(analyst).find(k => 
+      k.toLowerCase() === 'track' || 
+      k.toLowerCase() === 'esteira' ||
+      k.toLowerCase().includes('esteira')
+    );
+    
+    return trackKey ? analyst[trackKey] : '';
   };
 
   // Debounce search query
@@ -530,6 +546,15 @@ export default function App() {
           setHasMoreAnalysts(false);
         }
       }),
+      onValue(refs.analysts, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+          setAllAnalysts(list);
+        } else {
+          setAllAnalysts([]);
+        }
+      }),
       onValue(refs.systems, (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -583,7 +608,7 @@ export default function App() {
       // Fallback to name/email/track if they exist
       (a.name && a.name.toLowerCase().includes(searchLower)) ||
       (a.email && a.email.toLowerCase().includes(searchLower)) ||
-      (a.track && a.track.toLowerCase().includes(searchLower));
+      (getAnalystTrack(a) && getAnalystTrack(a).toLowerCase().includes(searchLower));
       
       const matchesStatus = analystStatusFilter === 'all' || 
                            (analystStatusFilter === 'active' && !a.deactivatedAt) ||
@@ -605,12 +630,13 @@ export default function App() {
     accesses.forEach(acc => {
       if (acc.status === 'Ok') return;
       
-      const analyst = analysts.find(a => a.id === acc.analystId);
-      const trackName = analyst?.track?.trim() || 'Sem Esteira';
+      const analyst = allAnalysts.find(a => a.id === acc.analystId);
+      const rawTrackName = getAnalystTrack(analyst)?.trim() || 'Sem Esteira';
+      const officialTrack = tracks.find(t => t.name.trim().toLowerCase() === rawTrackName.toLowerCase());
+      const trackName = officialTrack ? officialTrack.name : rawTrackName;
       const system = systems.find(s => s.id === acc.systemId);
       
       if (!trackGroups[trackName]) {
-        const officialTrack = tracks.find(t => t.name.trim().toLowerCase() === trackName.toLowerCase());
         trackGroups[trackName] = {
           id: officialTrack?.id || `virtual-${trackName}`,
           name: officialTrack ? officialTrack.name : `${trackName}${trackName !== 'Sem Esteira' ? ' (Não Cadastrada)' : ''}`,
@@ -644,9 +670,11 @@ export default function App() {
       
       const system = systems.find(s => s.id === acc.systemId);
       const systemName = system?.name || 'Sistema Desconhecido';
-      const analyst = analysts.find(a => a.id === acc.analystId);
-      const trackName = analyst?.track?.trim() || 'Sem Esteira';
-      const track = tracks.find(t => t.name.trim().toLowerCase() === trackName.toLowerCase()) || { id: `virtual-${trackName}`, name: trackName };
+      const analyst = allAnalysts.find(a => a.id === acc.analystId);
+      const rawTrackName = getAnalystTrack(analyst)?.trim() || 'Sem Esteira';
+      const officialTrack = tracks.find(t => t.name.trim().toLowerCase() === rawTrackName.toLowerCase());
+      const trackName = officialTrack ? officialTrack.name : rawTrackName;
+      const track = officialTrack || { id: `virtual-${trackName}`, name: trackName };
       
       if (!systemGroups[systemName]) {
         systemGroups[systemName] = {
@@ -1194,7 +1222,7 @@ export default function App() {
           if (user?.email) {
             await logAction(user.email, 'DELETE_TRACK', `Excluiu a esteira: ${track.name}`, 'Configurações');
           }
-          const analystsToUpdate = analysts.filter(a => a.track === track.name);
+          const analystsToUpdate = analysts.filter(a => getAnalystTrack(a) === track.name);
           for (const analyst of analystsToUpdate) {
             await update(ref(db, `analysts/${analyst.id}`), { track: '' });
           }
@@ -1652,14 +1680,14 @@ export default function App() {
             // 1. Identify all headers
             const headersSet = new Set(['Nome', 'Email', 'Esteira', 'Data de Criação', 'Data de Desligamento', 'Aprovado Por']);
             analystFields.forEach(f => {
-               if (!['name', 'email', 'track', 'createdAt', 'deactivatedAt', 'approvedByName'].includes(f.id)) {
+               if (!['name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedByName'].includes(f.id) && !f.id.toLowerCase().includes('esteira')) {
                  headersSet.add(f.label);
                }
             });
             // Add any other keys found in data
             analystsList.forEach(val => {
               Object.keys(val).forEach(key => {
-                if (!['id', 'name', 'email', 'track', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key)) {
+                if (!['id', 'name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key) && !key.toLowerCase().includes('esteira')) {
                   const field = analystFields.find(f => f.id === key);
                   headersSet.add(field?.label || key);
                 }
@@ -1671,9 +1699,9 @@ export default function App() {
             dataToExport = analystsList.map(val => {
               const row: any = {};
               allHeaders.forEach(header => {
-                if (header === 'Nome') row[header] = val.name || '';
-                else if (header === 'Email') row[header] = val.email || '';
-                else if (header === 'Esteira') row[header] = val.track || '';
+                if (header === 'Nome') row[header] = getAnalystDisplayName(val);
+                else if (header === 'Email') row[header] = getAnalystEmail(val);
+                else if (header === 'Esteira') row[header] = getAnalystTrack(val);
                 else if (header === 'Data de Criação') row[header] = val.createdAt || '';
                 else if (header === 'Data de Desligamento') row[header] = val.deactivatedAt || '';
                 else if (header === 'Aprovado Por') row[header] = val.approvedByName || '';
@@ -1739,14 +1767,14 @@ export default function App() {
             // 1. Identify all headers
             const headersSet = new Set(['Nome Sistema', 'Status', 'Última Atualização', 'Nome', 'Email', 'Esteira', 'Data de Criação', 'Data de Desligamento', 'Aprovado Por']);
             analystFields.forEach(f => {
-               if (!['name', 'email', 'track', 'createdAt', 'deactivatedAt', 'approvedByName'].includes(f.id)) {
+               if (!['name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedByName'].includes(f.id) && !f.id.toLowerCase().includes('esteira')) {
                  headersSet.add(f.label);
                }
             });
             // Add any other keys found in analyst data
             Object.values(allAnalysts).forEach((analyst: any) => {
               Object.keys(analyst).forEach(key => {
-                if (!['id', 'name', 'email', 'track', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key)) {
+                if (!['id', 'name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key) && !key.toLowerCase().includes('esteira')) {
                   const field = analystFields.find(f => f.id === key);
                   headersSet.add(field?.label || key);
                 }
@@ -1766,7 +1794,7 @@ export default function App() {
                 else if (header === 'Última Atualização') row[header] = acc.updatedAt;
                 else if (header === 'Nome') row[header] = getAnalystDisplayName(analyst);
                 else if (header === 'Email') row[header] = getAnalystEmail(analyst);
-                else if (header === 'Esteira') row[header] = analyst.track || '';
+                else if (header === 'Esteira') row[header] = getAnalystTrack(analyst);
                 else if (header === 'Data de Criação') row[header] = analyst.createdAt || '';
                 else if (header === 'Data de Desligamento') row[header] = analyst.deactivatedAt || '';
                 else if (header === 'Aprovado Por') row[header] = analyst.approvedByName || '';
@@ -2448,7 +2476,7 @@ export default function App() {
                             </td>
                             <td className="px-6 py-4">
                               <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">
-                                {analyst.track}
+                                {getAnalystTrack(analyst)}
                               </span>
                             </td>
                             <td className="px-6 py-4">
@@ -2607,7 +2635,7 @@ export default function App() {
                         </div>
                         <div className="flex items-center justify-between pt-2">
                           <span className="px-3 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider rounded-full">
-                            {analyst.track}
+                            {getAnalystTrack(analyst)}
                           </span>
                           <div className="flex flex-wrap gap-2 justify-end">
                             {pending === 0 && lost === 0 ? (
@@ -2681,11 +2709,11 @@ export default function App() {
                   <div className="flex-1 flex items-center justify-between gap-2 lg:gap-4">
                     <div className="flex items-center gap-3 lg:gap-4">
                       <div className="w-10 h-10 lg:w-16 lg:h-16 rounded-xl lg:rounded-3xl bg-indigo-600 flex items-center justify-center text-white text-sm lg:text-2xl font-bold shrink-0">
-                        {selectedAnalyst.name.split(' ').map((n, i) => <span key={i}>{n[0]}</span>)}
+                        {getAnalystInitials(selectedAnalyst)}
                       </div>
                       <div className="min-w-0">
-                        <h2 className="text-lg lg:text-2xl font-bold text-slate-800 truncate">{selectedAnalyst.name}</h2>
-                        <p className="text-[10px] lg:text-base text-slate-500 truncate">{selectedAnalyst.track} • {selectedAnalyst.email}</p>
+                        <h2 className="text-lg lg:text-2xl font-bold text-slate-800 truncate">{getAnalystDisplayName(selectedAnalyst)}</h2>
+                        <p className="text-[10px] lg:text-base text-slate-500 truncate">{getAnalystTrack(selectedAnalyst)} • {getAnalystEmail(selectedAnalyst)}</p>
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
                           {selectedAnalyst.createdAt && (
                             <p className="text-[10px] text-slate-400">Criado em: {new Date(selectedAnalyst.createdAt).toLocaleDateString('pt-BR')}</p>
@@ -2712,12 +2740,12 @@ export default function App() {
                 </div>
 
                 {/* Custom Fields Section */}
-                {analystFields.some(f => !['name', 'email', 'track'].includes(f.id) && selectedAnalyst[f.id]) && (
+                {analystFields.some(f => !['name', 'email', 'track', 'email_interfile', 'esteira'].includes(f.id) && !f.id.toLowerCase().includes('esteira') && selectedAnalyst[f.id]) && (
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6">
                     <h3 className="font-bold text-slate-800 mb-4">Informações Adicionais</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {analystFields
-                        .filter(f => !['name', 'email', 'track'].includes(f.id) && selectedAnalyst[f.id])
+                        .filter(f => !['name', 'email', 'track', 'email_interfile', 'esteira'].includes(f.id) && !f.id.toLowerCase().includes('esteira') && selectedAnalyst[f.id])
                         .map(field => (
                           <div key={field.id}>
                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
@@ -2973,13 +3001,13 @@ export default function App() {
                               </div>
                             );
                           }
-                          if (field.id === 'track') {
+                          if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
                             return (
                               <div key={field.id}>
                                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                                   {field.label}
                                 </label>
-                                <select name="track" required defaultValue={defaultValue} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all">
+                                <select name={field.id} required defaultValue={defaultValue} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all">
                                   <option value="">Selecione uma esteira</option>
                                   {tracks.map(track => (
                                     <option key={track.id} value={track.name}>{track.name}</option>
@@ -3266,10 +3294,10 @@ export default function App() {
                                   <div className="space-y-3">
                                     <div className="flex justify-between text-sm">
                                       <span className="text-slate-500">Esteira:</span>
-                                      <span className="font-bold text-slate-700">{selectedRequestForApproval.analystData.track}</span>
+                                      <span className="font-bold text-slate-700">{getAnalystTrack(selectedRequestForApproval.analystData)}</span>
                                     </div>
                                     {analystFields
-                                      .filter(f => !['name', 'email', 'track'].includes(f.id) && selectedRequestForApproval.analystData[f.id])
+                                      .filter(f => !['name', 'email', 'track', 'email_interfile', 'esteira'].includes(f.id) && !f.id.toLowerCase().includes('esteira') && selectedRequestForApproval.analystData[f.id])
                                       .map(field => (
                                         <div key={field.id} className="flex justify-between text-sm">
                                           <span className="text-slate-500">{field.label}:</span>
@@ -3997,13 +4025,13 @@ export default function App() {
                             </div>
                           );
                         }
-                        if (field.id === 'track') {
+                        if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
                           return (
                             <div key={field.id}>
                               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                                 {field.label}
                               </label>
-                              <select name="track" defaultValue={editingAnalyst?.track} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
+                              <select name={field.id} defaultValue={getAnalystTrack(editingAnalyst)} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
                                 {tracks.slice().sort((a, b) => a.name.localeCompare(b.name)).map(track => (
                                   <option key={track.id} value={track.name}>{track.name}</option>
                                 ))}
@@ -4315,8 +4343,14 @@ export default function App() {
                     }
                     // Update analysts track name
                     analysts.forEach(a => {
-                      if (a.track === oldName) {
-                        update(ref(db, `analysts/${a.id}`), { track: name });
+                      if (getAnalystTrack(a) === oldName) {
+                        // Find the actual key used for track
+                        const trackKey = Object.keys(a).find(k => 
+                          k.toLowerCase() === 'track' || 
+                          k.toLowerCase() === 'esteira' ||
+                          k.toLowerCase().includes('esteira')
+                        ) || 'track';
+                        update(ref(db, `analysts/${a.id}`), { [trackKey]: name });
                       }
                     });
                     setEditingTrack(null);
