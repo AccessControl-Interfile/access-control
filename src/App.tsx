@@ -2460,59 +2460,69 @@ export default function App() {
 
                 {/* Chart Section */}
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                  <div className="mb-6">
+                  <div className="mb-2">
                     <h3 className="font-bold text-slate-800">Distribuição de Alertas</h3>
                     <p className="text-xs text-slate-500">Visualização por {dashboardViewMode === 'byTrack' ? 'esteira' : 'sistema'}</p>
                   </div>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={dashboardViewMode === 'byTrack' ? stats.byTrack : stats.bySystem}
-                        margin={{ top: 20, right: 10, left: 10, bottom: 0 }}
-                      >
-                        <XAxis 
-                          dataKey="name" 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 600 }}
-                          dy={10}
-                        />
-                        <Tooltip 
-                          cursor={false}
-                          contentStyle={{ 
-                            borderRadius: '16px', 
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                            fontSize: '12px',
-                            fontWeight: '600'
-                          }}
-                        />
-                        <Legend 
-                          verticalAlign="top" 
-                          align="right" 
-                          iconType="circle"
-                          wrapperStyle={{ paddingBottom: '20px', fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                        />
-                        <Bar 
-                          name="Pendentes" 
-                          dataKey="pendingCount" 
-                          fill="#f59e0b" 
-                          radius={[4, 4, 0, 0]} 
-                          barSize={32}
+                  <div className="flex items-center justify-center gap-6 mb-4 text-[10px] font-bold uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></div>
+                      <span className="text-slate-700">Pendentes</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#f43f5e]"></div>
+                      <span className="text-slate-700">Perdidos</span>
+                    </div>
+                  </div>
+                  <div className="h-[420px] w-full overflow-x-auto overflow-y-hidden pb-4">
+                    <div className="h-full" style={{ minWidth: dashboardViewMode === 'byTrack' ? `max(100%, ${stats.byTrack.length * 150}px)` : `max(100%, ${stats.bySystem.length * 250}px)` }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={dashboardViewMode === 'byTrack' ? stats.byTrack : stats.bySystem}
+                          margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
                         >
-                          <LabelList dataKey="pendingCount" position="top" style={{ fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }} />
-                        </Bar>
-                        <Bar 
-                          name="Perdidos" 
-                          dataKey="lostCount" 
-                          fill="#f43f5e" 
-                          radius={[4, 4, 0, 0]} 
-                          barSize={32}
-                        >
-                          <LabelList dataKey="lostCount" position="top" style={{ fill: '#f43f5e', fontSize: 10, fontWeight: 'bold' }} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
+                          <XAxis 
+                            dataKey="name" 
+                            axisLine={false} 
+                            tickLine={false} 
+                            tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
+                            dy={15}
+                            interval={0}
+                            height={60}
+                          />
+                          <Tooltip 
+                            cursor={false}
+                            contentStyle={{ 
+                              borderRadius: '16px', 
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              backgroundColor: '#ffffff'
+                            }}
+                            labelStyle={{ color: '#0f172a', marginBottom: '8px' }}
+                          />
+                          <Bar 
+                            name="Pendentes" 
+                            dataKey="pendingCount" 
+                            fill="#f59e0b" 
+                            radius={[4, 4, 0, 0]} 
+                            barSize={32}
+                          >
+                            <LabelList dataKey="pendingCount" position="top" style={{ fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }} />
+                          </Bar>
+                          <Bar 
+                            name="Perdidos" 
+                            dataKey="lostCount" 
+                            fill="#f43f5e" 
+                            radius={[4, 4, 0, 0]} 
+                            barSize={32}
+                          >
+                            <LabelList dataKey="lostCount" position="top" style={{ fill: '#f43f5e', fontSize: 10, fontWeight: 'bold' }} />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
 
