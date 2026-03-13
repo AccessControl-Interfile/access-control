@@ -34,7 +34,8 @@ import {
   Upload,
   UserMinus,
   Moon,
-  Sun
+  Sun,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'motion/react';
 import { 
@@ -50,7 +51,7 @@ import {
 } from 'recharts';
 import { ref, onValue, set, push, update, remove, get, query, orderByChild, limitToFirst, startAt, endAt } from 'firebase/database';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { db, auth, firebaseConfig } from './lib/firebase';
 import { logAction } from './lib/auditLogger';
 import { logDb } from './lib/firebase';
@@ -437,10 +438,12 @@ export default function App() {
     isOpen: boolean;
     title: string;
     message: string;
-    onConfirm: () => void;
+    onConfirm: (password?: string) => void;
     confirmText?: string;
     confirmColor?: string;
+    requirePassword?: boolean;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirmar', confirmColor: 'bg-rose-600' });
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Auth State
   useEffect(() => {
@@ -608,11 +611,27 @@ export default function App() {
       }),
       onValue(refs.analystFields, (snapshot) => {
         const data = snapshot.val();
-        if (data) setAnalystFields(data);
+        if (data) {
+          const arr = Array.isArray(data) ? data : Object.values(data);
+          const validItems = arr.filter(item => item && typeof item === 'object' && 'id' in item) as FieldDefinition[];
+          // Remove duplicates by id
+          const uniqueItems = Array.from(new Map(validItems.map(item => [item.id, item])).values());
+          setAnalystFields(uniqueItems);
+        } else {
+          setAnalystFields(INITIAL_ANALYST_FIELDS);
+        }
       }),
       onValue(refs.systemFields, (snapshot) => {
         const data = snapshot.val();
-        if (data) setSystemFields(data);
+        if (data) {
+          const arr = Array.isArray(data) ? data : Object.values(data);
+          const validItems = arr.filter(item => item && typeof item === 'object' && 'id' in item) as FieldDefinition[];
+          // Remove duplicates by id
+          const uniqueItems = Array.from(new Map(validItems.map(item => [item.id, item])).values());
+          setSystemFields(uniqueItems);
+        } else {
+          setSystemFields(INITIAL_SYSTEM_FIELDS);
+        }
       })
     ];
 
@@ -1503,6 +1522,46 @@ export default function App() {
               } catch (error: any) {
                   console.error("Erro ao excluir usuário:", error);
                   showToast("Erro ao excluir usuário: " + error.message, "error");
+              }
+          }
+      });
+  };
+
+  const resetUserPassword = (id: string) => {
+      if (!hasPermission('settings_users')) return;
+      setConfirmModal({
+          isOpen: true,
+          title: 'Resetar Senha',
+          message: 'Para forçar a redefinição de senha deste usuário, por favor, insira sua senha atual.',
+          confirmText: 'Resetar Senha',
+          confirmColor: 'bg-amber-500',
+          requirePassword: true,
+          onConfirm: async (password?: string) => {
+              try {
+                  if (!password) {
+                      showToast("Senha é obrigatória.", "error");
+                      return;
+                  }
+                  if (user?.email) {
+                      const credential = EmailAuthProvider.credential(user.email, password);
+                      await reauthenticateWithCredential(user, credential);
+                  }
+
+                  await update(ref(db, `users/${id}`), { mustChangePassword: true });
+                  if (user?.email) {
+                    const resetUser = users.find(u => u.id === id);
+                    await logAction(user.email, 'RESET_PASSWORD', `Forçou redefinição de senha para o usuário: ${resetUser?.name || id} (${resetUser?.email || ''})`, 'Configurações');
+                  }
+                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  setConfirmPassword('');
+                  showToast("Usuário forçado a redefinir a senha com sucesso!", "success");
+              } catch (error: any) {
+                  console.error("Erro ao resetar senha do usuário:", error);
+                  if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                      showToast("Senha incorreta.", "error");
+                  } else {
+                      showToast("Erro ao resetar senha: " + error.message, "error");
+                  }
               }
           }
       });
@@ -3764,7 +3823,7 @@ export default function App() {
                         <button 
                           onClick={() => {
                             if (isReorderingAnalystFields) {
-                              set(ref(db, 'config/analystFields'), tempAnalystFields);
+                              set(ref(db, 'config/analystFields'), tempAnalystFields.map(f => ({ id: f.id, label: f.label, description: f.description })));
                             } else {
                               setTempAnalystFields(analystFields);
                             }
@@ -3845,7 +3904,7 @@ export default function App() {
                         <button 
                           onClick={() => {
                             if (isReorderingSystemFields) {
-                              set(ref(db, 'config/systemFields'), tempSystemFields);
+                              set(ref(db, 'config/systemFields'), tempSystemFields.map(f => ({ id: f.id, label: f.label, description: f.description })));
                             } else {
                               setTempSystemFields(systemFields);
                             }
@@ -4009,14 +4068,23 @@ export default function App() {
                                               </span>
                                               <div className="flex gap-1">
                                                   <button 
+                                                      onClick={() => resetUserPassword(user.id)}
+                                                      className="p-2 bg-white border border-slate-200 text-amber-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                                                      title="Forçar redefinição de senha"
+                                                  >
+                                                      <Key className="w-4 h-4" />
+                                                  </button>
+                                                  <button 
                                                       onClick={() => { setEditingUser(user); setIsAddingUser(true); }}
                                                       className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                                                      title="Editar usuário"
                                                   >
                                                       <Edit2 className="w-4 h-4" />
                                                   </button>
                                                   <button 
                                                       onClick={() => deleteUser(user.id)}
                                                       className="p-2 bg-white border border-slate-200 text-rose-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                                                      title="Excluir usuário"
                                                   >
                                                       <Trash2 className="w-4 h-4" />
                                                   </button>
@@ -4760,20 +4828,43 @@ export default function App() {
               className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
             >
               <div className="p-6 text-center">
-                <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-6 h-6 text-rose-600" />
+                <div className={cn("w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4", confirmModal.requirePassword ? "bg-amber-50" : "bg-rose-50")}>
+                  {confirmModal.requirePassword ? <Key className="w-6 h-6 text-amber-500" /> : <AlertCircle className="w-6 h-6 text-rose-600" />}
                 </div>
                 <h3 className="text-lg font-bold text-slate-800 mb-2">{confirmModal.title}</h3>
                 <p className="text-slate-500 text-sm mb-6">{confirmModal.message}</p>
+                
+                {confirmModal.requirePassword && (
+                  <div className="mb-6 text-left">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Sua Senha Atual</label>
+                    <input 
+                      type="password" 
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Digite sua senha para confirmar"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      autoFocus
+                    />
+                  </div>
+                )}
+
                 <div className="flex gap-3">
                   <button 
-                    onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                    onClick={() => {
+                      setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                      setConfirmPassword('');
+                    }}
                     className="flex-1 px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
                   >
                     Cancelar
                   </button>
                   <button 
-                    onClick={() => { confirmModal.onConfirm(); setConfirmModal(prev => ({ ...prev, isOpen: false })); }}
+                    onClick={() => { 
+                      confirmModal.onConfirm(confirmModal.requirePassword ? confirmPassword : undefined); 
+                      if (!confirmModal.requirePassword) {
+                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                      }
+                    }}
                     className={cn("flex-1 px-4 py-2 text-white font-bold rounded-xl transition-all shadow-lg", confirmModal.confirmColor || "bg-rose-600")}
                   >
                     {confirmModal.confirmText || "Excluir"}
