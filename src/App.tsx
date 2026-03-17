@@ -52,9 +52,22 @@ import {
 import { ref, onValue, set, push, update, remove, get, query, orderByChild, limitToFirst, startAt, endAt } from 'firebase/database';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
-import { db, auth, firebaseConfig } from './lib/firebase';
+import { db, auth, firebaseConfig, logDb } from './lib/firebase';
 import { logAction } from './lib/auditLogger';
-import { logDb } from './lib/firebase';
+import DashboardTab from './components/tabs/DashboardTab';
+import SettingsTab from './components/tabs/SettingsTab';
+import AnalystsTab from './components/tabs/AnalystsTab';
+import SystemsTab from './components/tabs/SystemsTab';
+import RequestTab from './components/tabs/RequestTab';
+import ApprovalsTab from './components/tabs/ApprovalsTab';
+import ExtractTab from './components/tabs/ExtractTab';
+import { AnalystModal } from './components/modals/AnalystModal';
+import { SystemModal } from './components/modals/SystemModal';
+import { FieldModal } from './components/modals/FieldModal';
+import { TrackModal } from './components/modals/TrackModal';
+import { UserModal } from './components/modals/UserModal';
+import { RoleModal } from './components/modals/RoleModal';
+import { ConfirmModal } from './components/modals/ConfirmModal';
 import { cn } from './lib/utils';
 import { Analyst, System, Access, AccessStatus, Track, FieldDefinition, User, Role, Permission, PERMISSIONS_LABELS, AccessRequest } from './types';
 import Login from './components/Login';
@@ -101,12 +114,6 @@ const INITIAL_ACCESSES: Access[] = [
   { analystId: '2', systemId: '2', status: 'Pendente', updatedAt: new Date().toISOString() },
   { analystId: '3', systemId: '5', status: 'Acesso perdido', updatedAt: new Date().toISOString() },
 ];
-
-const STATUS_CONFIG: Record<AccessStatus, { color: string; icon: React.ReactNode; label: string }> = {
-  'Ok': { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', icon: <CheckCircle2 className="w-4 h-4" />, label: 'Ok' },
-  'Pendente': { color: 'text-amber-600 bg-amber-50 border-amber-100', icon: <Clock className="w-4 h-4" />, label: 'Pendente' },
-  'Acesso perdido': { color: 'text-rose-600 bg-rose-50 border-rose-100', icon: <AlertCircle className="w-4 h-4" />, label: 'Acesso perdido' },
-};
 
 const UserForm = ({ user, roles, onSave, onCancel, showToast }: { user: User | null, roles: Role[], onSave: (data: any) => Promise<void>, onCancel: () => void, showToast: (msg: string, type?: ToastType) => void }) => {
   const [name, setName] = useState(user?.name || '');
@@ -232,81 +239,6 @@ const UserForm = ({ user, roles, onSave, onCancel, showToast }: { user: User | n
   );
 };
 
-const DraggableFieldItem = ({ 
-  field, 
-  onEdit, 
-  onDelete,
-  isReordering
-}: { 
-  field: FieldDefinition; 
-  onEdit: (field: FieldDefinition) => void; 
-  onDelete: (id: string) => void;
-  isReordering: boolean;
-  key?: string;
-}) => {
-  const controls = useDragControls();
-
-  const content = (
-    <>
-      {isReordering && (
-        <div 
-          onPointerDown={(e) => controls.start(e)}
-          className="text-indigo-400 hover:text-indigo-600 transition-colors cursor-grab active:cursor-grabbing p-1 touch-none"
-          title="Arraste para reordenar"
-        >
-          <GripVertical className="w-5 h-5" />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className={cn(
-          "text-xs font-bold uppercase mb-0.5",
-          isReordering ? "text-indigo-400" : "text-slate-400"
-        )}>Campo</p>
-        <p className="font-bold text-slate-700 truncate">{field.label}</p>
-        <p className="text-xs text-slate-500 truncate">{field.description}</p>
-      </div>
-      {!isReordering ? (
-        <div className="flex gap-1">
-          <button 
-            onClick={() => onEdit(field)}
-            className="p-2 bg-white text-indigo-600 border border-slate-200 rounded-xl shadow-sm hover:bg-indigo-50 transition-all cursor-pointer"
-          >
-            <Edit2 className="w-4 h-4" />
-          </button>
-          <button 
-            onClick={() => onDelete(field.id)}
-            className="p-2 bg-white text-rose-600 border border-slate-200 rounded-xl shadow-sm hover:bg-rose-50 transition-all cursor-pointer"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      ) : (
-        <div className="w-8 h-8 flex items-center justify-center text-indigo-300">
-          <Move className="w-4 h-4" />
-        </div>
-      )}
-    </>
-  );
-
-  if (isReordering) {
-    return (
-      <Reorder.Item 
-        value={field}
-        dragListener={false}
-        dragControls={controls}
-        className="group p-4 bg-indigo-50/50 rounded-2xl border border-indigo-200 flex items-center gap-4 shadow-sm"
-      >
-        {content}
-      </Reorder.Item>
-    );
-  }
-
-  return (
-    <div className="group p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 hover:border-indigo-200 transition-colors">
-      {content}
-    </div>
-  );
-};
 
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
@@ -406,7 +338,7 @@ export default function App() {
   const [isAddingField, setIsAddingField] = useState<{ type: 'analyst' | 'system' } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [systemSearchQuery, setSystemSearchQuery] = useState('');
+
   const [usersLimit, setUsersLimit] = useState(10);
   const [roles, setRoles] = useState<Role[]>([]);
   const [isAddingUser, setIsAddingUser] = useState(false);
@@ -443,7 +375,7 @@ export default function App() {
     confirmColor?: string;
     requirePassword?: boolean;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirmar', confirmColor: 'bg-rose-600' });
-  const [confirmPassword, setConfirmPassword] = useState('');
+
 
   // Auth State
   useEffect(() => {
@@ -858,86 +790,7 @@ export default function App() {
     });
   };
 
-  useEffect(() => {
-    if (isAddingAnalyst && editingAnalyst) {
-      const currentSystems = accesses
-        .filter(a => a.analystId === editingAnalyst.id)
-        .map(a => a.systemId);
-      setSelectedSystemsInForm(currentSystems);
-    } else if (isAddingAnalyst) {
-      setSelectedSystemsInForm([]);
-    }
-  }, [isAddingAnalyst, editingAnalyst, accesses]);
 
-  const handleAddAnalyst = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!canManageAnalysts && !canManageAccess) return;
-    const formData = new FormData(e.currentTarget);
-    
-    const analystData: any = {};
-    analystFields.forEach(field => {
-      analystData[field.id] = formData.get(field.id) as string;
-    });
-
-    let analystId = editingAnalyst?.id;
-
-    if (editingAnalyst) {
-      if (editingAnalyst.deactivatedAt) {
-        showToast("Este analista está desligado e não pode ser editado.", "error");
-        return;
-      }
-      if (canManageAnalysts) {
-        await update(ref(db, `analysts/${editingAnalyst.id}`), analystData);
-        if (user?.email) {
-          await logAction(
-            user.email, 
-            'EDIT_ANALYST', 
-            `Editou dados do analista: ${getAnalystDisplayName(analystData) || getAnalystDisplayName(editingAnalyst)}`, 
-            'Analistas',
-            editingAnalyst,
-            { ...editingAnalyst, ...analystData }
-          );
-        }
-      }
-      setEditingAnalyst(null);
-    } else if (canManageAnalysts) {
-      analystId = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
-      await set(ref(db, `analysts/${analystId}`), { ...analystData, id: analystId, createdAt });
-      if (user?.email) {
-        await logAction(user.email, 'CREATE_ANALYST', `Criou analista: ${getAnalystDisplayName(analystData)}`, 'Analistas');
-      }
-    }
-
-    // Update Accesses
-    if (analystId) {
-      const currentAccesses = accesses.filter(a => a.analystId === analystId);
-      const currentSystemIds = currentAccesses.map(a => a.systemId);
-
-      // Add new accesses
-      for (const systemId of selectedSystemsInForm) {
-        if (!currentSystemIds.includes(systemId)) {
-          await set(ref(db, `accesses/${analystId}_${systemId}`), {
-            analystId,
-            systemId,
-            status: 'Pendente',
-            updatedAt: new Date().toISOString()
-          });
-        }
-      }
-
-      // Remove unselected accesses
-      for (const access of currentAccesses) {
-        if (!selectedSystemsInForm.includes(access.systemId)) {
-          await remove(ref(db, `accesses/${analystId}_${access.systemId}`));
-        }
-      }
-    }
-
-    setIsAddingAnalyst(false);
-    setSelectedSystemsInForm([]);
-    showToast(editingAnalyst ? "Analista atualizado com sucesso!" : "Analista criado com sucesso!", "success");
-  };
 
   const handleRequestAccess = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1190,38 +1043,7 @@ export default function App() {
     });
   };
 
-  const handleAddSystem = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!canManageSystems) return;
-    const formData = new FormData(e.currentTarget);
-    
-    const systemData: any = {};
-    systemFields.forEach(field => {
-      systemData[field.id] = formData.get(field.id) as string;
-    });
 
-    if (editingSystem) {
-      update(ref(db, `systems/${editingSystem.id}`), systemData);
-      if (user?.email) {
-        logAction(
-          user.email, 
-          'EDIT_SYSTEM', 
-          `Editou o sistema: ${systemData.name || editingSystem.name}`, 
-          'Sistemas',
-          editingSystem,
-          { ...editingSystem, ...systemData }
-        );
-      }
-      setEditingSystem(null);
-    } else {
-      const id = crypto.randomUUID();
-      set(ref(db, `systems/${id}`), { ...systemData, id });
-      if (user?.email) {
-        logAction(user.email, 'CREATE_SYSTEM', `Criou o sistema: ${systemData.name}`, 'Sistemas');
-      }
-    }
-    setIsAddingSystem(false);
-  };
 
   const deleteAnalyst = (id: string) => {
     if (!canManageAnalysts) return;
@@ -1314,53 +1136,7 @@ export default function App() {
     });
   };
 
-  const handleAddField = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    if (isAddingField?.type === 'analyst' && !hasPermission('settings_analyst_fields')) return;
-    if (isAddingField?.type === 'system' && !hasPermission('settings_system_fields')) return;
 
-    const formData = new FormData(e.currentTarget);
-    const id = formData.get('id') as string;
-    const label = formData.get('label') as string;
-    const description = formData.get('description') as string;
-
-    const reservedAnalystIds = ['id', 'name', 'email', 'track', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'];
-    const reservedSystemIds = ['id', 'name', 'description'];
-
-    if (isAddingField?.type === 'analyst' && reservedAnalystIds.includes(id)) {
-      showToast("Este ID é reservado pelo sistema. Escolha outro.", "error");
-      return;
-    }
-    if (isAddingField?.type === 'system' && reservedSystemIds.includes(id)) {
-      showToast("Este ID é reservado pelo sistema. Escolha outro.", "error");
-      return;
-    }
-
-    if (isAddingField?.type === 'analyst' && analystFields.some(f => f.id === id)) {
-      showToast("Já existe um campo com este ID.", "error");
-      return;
-    }
-    if (isAddingField?.type === 'system' && systemFields.some(f => f.id === id)) {
-      showToast("Já existe um campo com este ID.", "error");
-      return;
-    }
-
-    if (isAddingField?.type === 'analyst') {
-      const newFields = [...analystFields, { id, label, description }];
-      set(ref(db, 'config/analystFields'), newFields);
-      if (user?.email) {
-        logAction(user.email, 'ADD_ANALYST_FIELD', `Adicionou campo de analista: ${label}`, 'Configurações');
-      }
-    } else if (isAddingField?.type === 'system') {
-      const newFields = [...systemFields, { id, label, description }];
-      set(ref(db, 'config/systemFields'), newFields);
-      if (user?.email) {
-        logAction(user.email, 'ADD_SYSTEM_FIELD', `Adicionou campo de sistema: ${label}`, 'Configurações');
-      }
-    }
-    setIsAddingField(null);
-  };
 
   const handleAddUser = async (userData: { name: string, email: string, roleId: string, permissions: Permission[] }) => {
     if (!hasPermission('settings_users')) {
@@ -1553,7 +1329,6 @@ export default function App() {
                     await logAction(user.email, 'RESET_PASSWORD', `Forçou redefinição de senha para o usuário: ${resetUser?.name || id} (${resetUser?.email || ''})`, 'Configurações');
                   }
                   setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                  setConfirmPassword('');
                   showToast("Usuário forçado a redefinir a senha com sucesso!", "success");
               } catch (error: any) {
                   console.error("Erro ao resetar senha do usuário:", error);
@@ -1855,7 +1630,7 @@ export default function App() {
       
       if (validRows > 0) {
         await update(ref(db), updates);
-        await logAction('mass_deactivate', 'analysts', `Desligou ${validRows} analistas em massa usando ${targetHeader}`);
+        await logAction(user?.email || 'Sistema', 'MASS_DEACTIVATE', `Desligou ${validRows} analistas em massa usando ${targetHeader}`, 'Analistas');
         showToast(`${validRows} analistas desligados com sucesso!${notFoundCount > 0 ? ` (${notFoundCount} não encontrados)` : ''}`, "success");
         setIsMassDeactivateModalOpen(false);
         setMassDeactivateFile(null);
@@ -2449,1737 +2224,143 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
-              <motion.div 
+              <DashboardTab 
                 key="dashboard"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-8"
-              >
-                {/* Dashboard Header & Toggle */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Monitoramento de Alertas</h2>
-                    <p className="text-slate-500">Acompanhe pendências e acessos perdidos na operação.</p>
-                  </div>
-                  <div className="flex p-1 bg-slate-100 rounded-2xl w-fit">
-                    <button 
-                      onClick={() => setDashboardViewMode('byTrack')}
-                      className={cn(
-                        "px-4 py-2 rounded-xl text-sm font-bold transition-all",
-                        dashboardViewMode === 'byTrack' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                      )}
-                    >
-                      Por Esteira
-                    </button>
-                    <button 
-                      onClick={() => setDashboardViewMode('bySystem')}
-                      className={cn(
-                        "px-4 py-2 rounded-xl text-sm font-bold transition-all",
-                        dashboardViewMode === 'bySystem' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                      )}
-                    >
-                      Por Sistema
-                    </button>
-                  </div>
-                </div>
-
-                {/* Stats Summary */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600">
-                      <Clock className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Total Pendentes</p>
-                      <p className="text-2xl font-bold text-slate-800">{stats.pendingCount}</p>
-                    </div>
-                  </div>
-                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-600">
-                      <AlertCircle className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Acessos Perdidos</p>
-                      <p className="text-2xl font-bold text-slate-800">{stats.lostCount}</p>
-                    </div>
-                  </div>
-                  {hasPermission('approve_access') && (
-                    <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                        <ClipboardCheck className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Aprovações Pendentes</p>
-                        <p className="text-2xl font-bold text-slate-800">{requests.filter(r => r.status === 'pending').length}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Chart Section */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                  <div className="mb-2">
-                    <h3 className="font-bold text-slate-800">Distribuição de Alertas</h3>
-                    <p className="text-xs text-slate-500">Visualização por {dashboardViewMode === 'byTrack' ? 'esteira' : 'sistema'}</p>
-                  </div>
-                  <div className="flex items-center justify-center gap-6 mb-4 text-[10px] font-bold uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></div>
-                      <span className="text-slate-700">Pendentes</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#f43f5e]"></div>
-                      <span className="text-slate-700">Perdidos</span>
-                    </div>
-                  </div>
-                  <div className="h-[420px] w-full overflow-x-auto overflow-y-hidden pb-4">
-                    <div className="h-full" style={{ minWidth: dashboardViewMode === 'byTrack' ? `max(100%, ${stats.byTrack.length * 150}px)` : `max(100%, ${stats.bySystem.length * 250}px)` }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={dashboardViewMode === 'byTrack' ? stats.byTrack : stats.bySystem}
-                          margin={{ top: 20, right: 30, left: 10, bottom: 20 }}
-                        >
-                          <XAxis 
-                            dataKey="name" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }}
-                            dy={15}
-                            interval={0}
-                            height={60}
-                          />
-                          <Tooltip 
-                            cursor={false}
-                            contentStyle={{ 
-                              borderRadius: '16px', 
-                              border: '1px solid #e2e8f0',
-                              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                              fontSize: '12px',
-                              fontWeight: '600',
-                              backgroundColor: '#ffffff'
-                            }}
-                            labelStyle={{ color: '#0f172a', marginBottom: '8px' }}
-                          />
-                          <Bar 
-                            name="Pendentes" 
-                            dataKey="pendingCount" 
-                            fill="#f59e0b" 
-                            radius={[4, 4, 0, 0]} 
-                            barSize={32}
-                          >
-                            <LabelList dataKey="pendingCount" position="top" style={{ fill: '#f59e0b', fontSize: 10, fontWeight: 'bold' }} />
-                          </Bar>
-                          <Bar 
-                            name="Perdidos" 
-                            dataKey="lostCount" 
-                            fill="#f43f5e" 
-                            radius={[4, 4, 0, 0]} 
-                            barSize={32}
-                          >
-                            <LabelList dataKey="lostCount" position="top" style={{ fill: '#f43f5e', fontSize: 10, fontWeight: 'bold' }} />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Grouped View */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {dashboardViewMode === 'byTrack' ? (
-                    stats.byTrack.map(track => (
-                      <div key={`track-stat-${track.id}`} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                          <div className="flex justify-between items-start">
-                            <h3 className="font-bold text-slate-800 text-lg">{track.name}</h3>
-                            <div className="flex flex-col items-end gap-1">
-                              {track.pendingCount > 0 && (
-                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full uppercase">
-                                  {track.pendingCount} Pendente{track.pendingCount > 1 ? 's' : ''}
-                                </span>
-                              )}
-                              {track.lostCount > 0 && (
-                                <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-full uppercase">
-                                  {track.lostCount} Perdido{track.lostCount > 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-6 flex-1 space-y-6">
-                          {track.pendingSystems.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> Pendentes
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {track.pendingSystems.map(system => (
-                                  <span key={system.id} className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100">
-                                    {system.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {track.lostSystems.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" /> Acessos Perdidos
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {track.lostSystems.map(system => (
-                                  <span key={system.id} className="px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg border border-rose-100">
-                                    {system.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    stats.bySystem.map(system => (
-                      <div key={`system-stat-${system.id}`} className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                        <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                          <div className="flex justify-between items-start">
-                            <h3 className="font-bold text-slate-800 text-lg">{system.name}</h3>
-                            <div className="flex flex-col items-end gap-1">
-                              {system.pendingCount > 0 && (
-                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-full uppercase">
-                                  {system.pendingCount} Pendente{system.pendingCount > 1 ? 's' : ''}
-                                </span>
-                              )}
-                              {system.lostCount > 0 && (
-                                <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-full uppercase">
-                                  {system.lostCount} Perdido{system.lostCount > 1 ? 's' : ''}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-6 flex-1 space-y-6">
-                          {system.pendingTracks.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                <Clock className="w-3 h-3" /> Esteiras Pendentes
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {system.pendingTracks.map(track => (
-                                  <span key={track.id} className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100">
-                                    {track.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {system.lostTracks.length > 0 && (
-                            <div>
-                              <p className="text-[10px] font-bold text-rose-600 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" /> Esteiras Perdidas
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {system.lostTracks.map(track => (
-                                  <span key={track.id} className="px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg border border-rose-100">
-                                    {track.name}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Empty State */}
-                {((dashboardViewMode === 'byTrack' && stats.byTrack.length === 0) || 
-                  (dashboardViewMode === 'bySystem' && stats.bySystem.length === 0)) && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center">
-                    <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-800">Tudo em ordem!</h3>
-                    <p className="text-slate-500">Não há pendências ou acessos perdidos no momento.</p>
-                  </div>
-                )}
-              </motion.div>
+                dashboardViewMode={dashboardViewMode}
+                setDashboardViewMode={setDashboardViewMode}
+                stats={stats}
+                hasPermission={hasPermission}
+                requests={requests}
+              />
             )}
 
-            {activeTab === 'analysts' && !selectedAnalyst && (
-              <motion.div 
-                key="analysts-list"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
-              >
-                {/* Desktop Table View */}
-                <div className="hidden md:block">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100">
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Analista</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Esteira</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Status de Acesso</th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {paginatedAnalysts.map(analyst => {
-                        const analystAccesses = accesses.filter(a => a.analystId === analyst.id);
-                        const pending = analystAccesses.filter(a => a.status === 'Pendente').length;
-                        const lost = analystAccesses.filter(a => a.status === 'Acesso perdido').length;
-                        
-                        return (
-                          <tr key={analyst.id} className="hover:bg-slate-50/50 transition-colors group">
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
-                                  {getAnalystInitials(analyst)}
-                                </div>
-                                <div>
-                                  <p className="text-sm font-bold text-slate-800">{getAnalystDisplayName(analyst)}</p>
-                                  <p className="text-xs text-slate-400">{getAnalystEmail(analyst)}</p>
-                                  {analyst.deactivatedAt && (
-                                    <p className="text-[10px] font-bold text-rose-500 uppercase mt-1">Desligado em: {new Date(analyst.deactivatedAt).toLocaleDateString('pt-BR')}</p>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs font-medium rounded-full">
-                                {getAnalystTrack(analyst)}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex flex-wrap gap-2">
-                                {pending === 0 && lost === 0 ? (
-                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    <span className="text-[10px] font-bold uppercase">Tudo Ok</span>
-                                  </div>
-                                ) : (
-                                  <>
-                                    {pending > 0 && (
-                                      <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
-                                        <Clock className="w-3 h-3" />
-                                        <span className="text-[10px] font-bold uppercase">{pending} Pendente{pending > 1 ? 's' : ''}</span>
-                                      </div>
-                                    )}
-                                    {lost > 0 && (
-                                      <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">
-                                        <AlertCircle className="w-3 h-3" />
-                                        <span className="text-[10px] font-bold uppercase">{lost} Perdido{lost > 1 ? 's' : ''}</span>
-                                      </div>
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end gap-1 sm:gap-2">
-                                <button 
-                                  onClick={() => setSelectedAnalyst(analyst)}
-                                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                  title="Gerenciar Acessos"
-                                >
-                                  <ShieldCheck className="w-5 h-5" />
-                                </button>
-                                {canManageAnalysts && (
-                                  <>
-                                    {!analyst.deactivatedAt && (
-                                      <button 
-                                        onClick={() => deactivateAnalyst(analyst.id)}
-                                        className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                        title="Desligar Analista"
-                                      >
-                                        <Power className="w-5 h-5" />
-                                      </button>
-                                    )}
-                                    <button 
-                                      onClick={() => { setEditingAnalyst(analyst); setIsAddingAnalyst(true); }}
-                                      disabled={!!analyst.deactivatedAt}
-                                      className={cn(
-                                        "p-2 transition-colors rounded-lg",
-                                        analyst.deactivatedAt ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                                      )}
-                                      title={analyst.deactivatedAt ? "Analistas desligados não podem ser editados" : "Editar"}
-                                    >
-                                      <Edit2 className="w-5 h-5" />
-                                    </button>
-                                    <button 
-                                      onClick={() => deleteAnalyst(analyst.id)}
-                                      disabled={!!analyst.deactivatedAt}
-                                      className={cn(
-                                        "p-2 transition-colors rounded-lg",
-                                        analyst.deactivatedAt ? "text-slate-200 cursor-not-allowed" : "text-rose-600 hover:bg-rose-50"
-                                      )}
-                                      title={analyst.deactivatedAt ? "Analistas desligados não podem ser excluídos" : "Excluir"}
-                                    >
-                                      <Trash2 className="w-5 h-5" />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Load More Button (Desktop) */}
-                {hasMoreAnalysts && filteredAnalysts.length > 0 && (
-                  <div className="hidden md:flex p-4 border-t border-slate-50 justify-center">
-                    <button 
-                      onClick={() => setAnalystsLimit(prev => prev + 20)}
-                      className="flex items-center gap-2 px-6 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm font-bold rounded-xl transition-all border border-slate-200"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Carregar Mais Analistas
-                    </button>
-                  </div>
-                )}
-
-                {/* Mobile Card View */}
-                <div className="md:hidden divide-y divide-slate-100">
-                  {paginatedAnalysts.map(analyst => {
-                    const analystAccesses = accesses.filter(a => a.analystId === analyst.id);
-                    const pending = analystAccesses.filter(a => a.status === 'Pendente').length;
-                    const lost = analystAccesses.filter(a => a.status === 'Acesso perdido').length;
-
-                    return (
-                      <div key={`mobile-${analyst.id}`} className="p-4 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
-                              {getAnalystInitials(analyst)}
-                            </div>
-                            <div>
-                              <p className="text-sm font-bold text-slate-800">{getAnalystDisplayName(analyst)}</p>
-                              <p className="text-xs text-slate-400">{getAnalystEmail(analyst)}</p>
-                              {analyst.deactivatedAt && (
-                                <p className="text-[10px] font-bold text-rose-500 uppercase mt-1">Desligado em: {new Date(analyst.deactivatedAt).toLocaleDateString('pt-BR')}</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={() => setSelectedAnalyst(analyst)}
-                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <ShieldCheck className="w-5 h-5" />
-                            </button>
-                            {canManageAnalysts && (
-                              <>
-                                {!analyst.deactivatedAt && (
-                                  <button 
-                                    onClick={() => deactivateAnalyst(analyst.id)}
-                                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                                  >
-                                    <Power className="w-5 h-5" />
-                                  </button>
-                                )}
-                                <button 
-                                  onClick={() => { setEditingAnalyst(analyst); setIsAddingAnalyst(true); }}
-                                  disabled={!!analyst.deactivatedAt}
-                                  className={cn(
-                                    "p-2 transition-colors rounded-lg",
-                                    analyst.deactivatedAt ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:text-indigo-600"
-                                  )}
-                                >
-                                  <Edit2 className="w-5 h-5" />
-                                </button>
-                                <button 
-                                  onClick={() => deleteAnalyst(analyst.id)}
-                                  disabled={!!analyst.deactivatedAt}
-                                  className={cn(
-                                    "p-2 transition-colors rounded-lg",
-                                    analyst.deactivatedAt ? "text-slate-200 cursor-not-allowed" : "text-rose-600 hover:bg-rose-50"
-                                  )}
-                                >
-                                  <Trash2 className="w-5 h-5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between pt-2">
-                          <span className="px-3 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider rounded-full">
-                            {getAnalystTrack(analyst)}
-                          </span>
-                          <div className="flex flex-wrap gap-2 justify-end">
-                            {pending === 0 && lost === 0 ? (
-                              <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100">
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span className="text-[10px] font-bold uppercase">Tudo Ok</span>
-                              </div>
-                            ) : (
-                              <>
-                                {pending > 0 && (
-                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
-                                    <Clock className="w-3 h-3" />
-                                    <span className="text-[10px] font-bold uppercase">{pending} Pendente</span>
-                                  </div>
-                                )}
-                                {lost > 0 && (
-                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 text-rose-600 rounded-lg border border-rose-100">
-                                    <AlertCircle className="w-3 h-3" />
-                                    <span className="text-[10px] font-bold uppercase">{lost} Perdido</span>
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Load More Button (Mobile) */}
-                {hasMoreAnalysts && filteredAnalysts.length > 0 && (
-                  <div className="md:hidden p-4 border-t border-slate-50 flex justify-center">
-                    <button 
-                      onClick={() => setAnalystsLimit(prev => prev + 20)}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-50 hover:bg-slate-100 text-slate-600 text-sm font-bold rounded-xl transition-all border border-slate-200"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Carregar Mais
-                    </button>
-                  </div>
-                )}
-
-                {filteredAnalysts.length === 0 && (
-                  <div className="p-12 text-center">
-                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Users className="w-8 h-8 text-slate-300" />
-                    </div>
-                    <p className="text-slate-500 font-medium">Nenhum analista encontrado.</p>
-                    <p className="text-sm text-slate-400 mt-1">Tente ajustar sua busca ou o filtro de status.</p>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {activeTab === 'analysts' && selectedAnalyst && (
-              <motion.div 
-                key="analyst-detail"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="space-y-6"
-              >
-                <div className="flex items-center gap-2 lg:gap-4 mb-6 lg:mb-8">
-                  <button 
-                    onClick={() => setSelectedAnalyst(null)}
-                    className="p-2 hover:bg-white rounded-full transition-colors border border-transparent hover:border-slate-200 cursor-pointer"
-                  >
-                    <ChevronRight className="w-5 h-5 lg:w-6 lg:h-6 rotate-180" />
-                  </button>
-                  <div className="flex-1 flex items-center justify-between gap-2 lg:gap-4">
-                    <div className="flex items-center gap-3 lg:gap-4">
-                      <div className="w-10 h-10 lg:w-16 lg:h-16 rounded-xl lg:rounded-3xl bg-indigo-600 flex items-center justify-center text-white text-sm lg:text-2xl font-bold shrink-0">
-                        {getAnalystInitials(selectedAnalyst)}
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="text-lg lg:text-2xl font-bold text-slate-800 truncate">{getAnalystDisplayName(selectedAnalyst)}</h2>
-                        <p className="text-[10px] lg:text-base text-slate-500 truncate">{getAnalystTrack(selectedAnalyst)} • {getAnalystEmail(selectedAnalyst)}</p>
-                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                          {selectedAnalyst.createdAt && (
-                            <p className="text-[10px] text-slate-400">Criado em: {new Date(selectedAnalyst.createdAt).toLocaleDateString('pt-BR')}</p>
-                          )}
-                          {selectedAnalyst.deactivatedAt && (
-                            <p className="text-[10px] font-bold text-rose-500 uppercase">Desligado em: {new Date(selectedAnalyst.deactivatedAt).toLocaleDateString('pt-BR')}</p>
-                          )}
-                          {selectedAnalyst.approvedByName && (
-                            <p className="text-[10px] text-slate-400">Aprovado por: <span className="font-bold text-slate-600">{selectedAnalyst.approvedByName}</span></p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {canManageAnalysts && !selectedAnalyst.deactivatedAt && (
-                      <button 
-                        onClick={() => { setEditingAnalyst(selectedAnalyst); setIsAddingAnalyst(true); }}
-                        className="p-2 lg:p-3 bg-white border border-slate-200 text-slate-600 rounded-xl lg:rounded-2xl hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm shrink-0 cursor-pointer"
-                        title="Editar Dados do Analista"
-                      >
-                        <Edit2 className="w-4 h-4 lg:w-5 lg:h-5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Custom Fields Section */}
-                {analystFields.some(f => !['name', 'email', 'track', 'email_interfile', 'esteira'].includes(f.id) && !f.id.toLowerCase().includes('esteira') && selectedAnalyst[f.id]) && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden p-6">
-                    <h3 className="font-bold text-slate-800 mb-4">Informações Adicionais</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {analystFields
-                        .filter(f => !['name', 'email', 'track', 'email_interfile', 'esteira'].includes(f.id) && !f.id.toLowerCase().includes('esteira') && selectedAnalyst[f.id])
-                        .map(field => (
-                          <div key={field.id}>
-                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                              {field.label}
-                            </label>
-                            <p className="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                              {selectedAnalyst[field.id]}
-                            </p>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-bold text-slate-800">Controle de Acessos</h3>
-                      <p className="text-sm text-slate-500">Sistemas vinculados a este analista e seus respectivos status.</p>
-                    </div>
-                    {(canManageAnalysts || canManageAccess) && !selectedAnalyst.deactivatedAt && (
-                      <button 
-                        onClick={() => { setEditingAnalyst(selectedAnalyst); setIsAddingAnalyst(true); }}
-                        className="px-4 py-2 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-colors flex items-center gap-2"
-                      >
-                        <Settings className="w-4 h-4" />
-                        Gerenciar Sistemas
-                      </button>
-                    )}
-                  </div>
-                  <div className="divide-y divide-slate-50">
-                    {systems
-                      .filter(system => accesses.some(a => a.analystId === selectedAnalyst.id && a.systemId === system.id))
-                      .map(system => {
-                        const access = accesses.find(a => a.analystId === selectedAnalyst.id && a.systemId === system.id);
-                        const currentStatus = access?.status || 'Não utiliza';
-                      
-                      return (
-                        <div key={system.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <div className={cn(
-                              "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors shrink-0",
-                              currentStatus === 'Ok' ? "bg-emerald-50 text-emerald-600" : "bg-indigo-50 text-indigo-600"
-                            )}>
-                              <Monitor className="w-6 h-6" />
-                            </div>
-                            <div>
-                              <p className="font-bold text-slate-800">{system.name}</p>
-                              <p className="text-xs text-slate-400 max-w-xs">{system.description}</p>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 lg:flex items-center gap-2">
-                            {canManageAccess && !selectedAnalyst.deactivatedAt ? (
-                              (['Ok', 'Pendente', 'Acesso perdido'] as AccessStatus[]).map((status) => (
-                                <button
-                                  key={status}
-                                  onClick={() => handleUpdateAccess(selectedAnalyst.id, system.id, status)}
-                                  className={cn(
-                                    "px-3 py-2 rounded-xl text-[10px] font-bold transition-all border text-center",
-                                    currentStatus === status 
-                                      ? STATUS_CONFIG[status].color
-                                      : "bg-white text-slate-400 border-slate-100 hover:border-slate-300"
-                                  )}
-                                >
-                                  {status}
-                                </button>
-                              ))
-                            ) : (
-                              <div className={cn(
-                                "px-3 py-2 rounded-xl text-[10px] font-bold border text-center",
-                                STATUS_CONFIG[currentStatus].color
-                              )}>
-                                {currentStatus}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {systems.filter(system => accesses.some(a => a.analystId === selectedAnalyst.id && a.systemId === system.id)).length === 0 && (
-                      <div className="p-12 text-center">
-                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <Monitor className="w-8 h-8 text-slate-200" />
-                        </div>
-                        <p className="text-slate-500 font-medium">Nenhum sistema vinculado.</p>
-                        <p className="text-xs text-slate-400 mt-1">Clique em "Gerenciar Sistemas" para vincular ferramentas a este analista.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
+            {activeTab === 'analysts' && (
+              <AnalystsTab 
+                key="analysts"
+                selectedAnalyst={selectedAnalyst}
+                setSelectedAnalyst={setSelectedAnalyst}
+                paginatedAnalysts={paginatedAnalysts}
+                filteredAnalysts={filteredAnalysts}
+                hasMoreAnalysts={hasMoreAnalysts}
+                setAnalystsLimit={setAnalystsLimit}
+                accesses={accesses}
+                systems={systems}
+                canManageAnalysts={canManageAnalysts}
+                canManageAccess={canManageAccess}
+                deactivateAnalyst={deactivateAnalyst}
+                setEditingAnalyst={setEditingAnalyst}
+                setIsAddingAnalyst={setIsAddingAnalyst}
+                deleteAnalyst={deleteAnalyst}
+                getAnalystInitials={getAnalystInitials}
+                getAnalystDisplayName={getAnalystDisplayName}
+                getAnalystEmail={getAnalystEmail}
+                getAnalystTrack={getAnalystTrack}
+                handleUpdateAccess={handleUpdateAccess}
+                analystFields={analystFields}
+              />
             )}
 
             {activeTab === 'systems' && (
-              <motion.div 
-                key="systems-list"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
-              >
-                {systems
-                  .filter(system => 
-                    system.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                    system.description.toLowerCase().includes(searchQuery.toLowerCase())
-                  )
-                  .map(system => {
-                  const usersCount = accesses.filter(a => a.systemId === system.id && a.status === 'Ok').length;
-                  const issuesCount = accesses.filter(a => a.systemId === system.id && (a.status === 'Acesso perdido' || a.status === 'Pendente')).length;
-                  
-                  return (
-                    <div key={system.id} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-all group relative">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                          <Monitor className="w-6 h-6" />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          {canManageSystems && (
-                            <>
-                              <button 
-                                onClick={() => { setEditingSystem(system); setIsAddingSystem(true); }}
-                                className="p-2 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
-                              >
-                                <Edit2 className="w-5 h-5" />
-                              </button>
-                              <button 
-                                onClick={() => deleteSystem(system.id)}
-                                className="p-2 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <h3 className="font-bold text-lg text-slate-800 mb-1">{system.name}</h3>
-                      <p className="text-sm text-slate-500 mb-4 line-clamp-2">{system.description}</p>
-                      
-                      {/* Custom System Fields */}
-                      {systemFields.some(f => !['name', 'description'].includes(f.id) && system[f.id]) && (
-                        <div className="space-y-2 mb-6">
-                          {systemFields
-                            .filter(f => !['name', 'description'].includes(f.id) && system[f.id])
-                            .map(field => (
-                              <div key={field.id} className="flex flex-col">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{field.label}</span>
-                                <span className="text-xs text-slate-600 truncate">{system[field.id]}</span>
-                              </div>
-                            ))}
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center justify-end pt-4 border-t border-slate-50">
-                        {issuesCount > 0 && (
-                          <div className="flex items-center gap-1 text-rose-500">
-                            <AlertCircle className="w-4 h-4" />
-                            <span className="text-xs font-bold">{issuesCount} Pendentes</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-                {canManageSystems && (
-                  <button 
-                    onClick={() => setIsAddingSystem(true)}
-                    className="border-2 border-dashed border-slate-200 rounded-3xl p-6 flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all group"
-                  >
-                    <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-indigo-50 transition-colors">
-                      <Plus className="w-6 h-6" />
-                    </div>
-                    <span className="font-bold text-sm">Adicionar Novo Sistema</span>
-                  </button>
-                )}
-              </motion.div>
+              <SystemsTab 
+                key="systems"
+                systems={systems}
+                accesses={accesses}
+                searchQuery={searchQuery}
+                canManageSystems={canManageSystems}
+                systemFields={systemFields}
+                setEditingSystem={setEditingSystem}
+                setIsAddingSystem={setIsAddingSystem}
+                deleteSystem={deleteSystem}
+              />
             )}
 
             {activeTab === 'request' && (
-              <motion.div 
+              <RequestTab 
                 key="request"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="max-w-4xl mx-auto space-y-6"
-              >
-                <div className="flex items-center justify-center">
-                  <div className="flex bg-slate-100 p-1 rounded-2xl">
-                    <button 
-                      onClick={() => { setRequestSubTab('new'); setEditingRequest(null); setSelectedSystemsInForm([]); }}
-                      className={cn(
-                        "px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
-                        requestSubTab === 'new' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                      )}
-                    >
-                      Nova Solicitação
-                    </button>
-                    <button 
-                      onClick={() => setRequestSubTab('my')}
-                      className={cn(
-                        "px-6 py-2.5 rounded-xl text-sm font-bold transition-all",
-                        requestSubTab === 'my' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                      )}
-                    >
-                      Solicitações
-                    </button>
-                  </div>
-                </div>
-
-                {requestSubTab === 'new' ? (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden max-w-2xl mx-auto">
-                    <div className="p-8 border-b border-slate-100">
-                      <h2 className="text-2xl font-bold text-slate-800 mb-2">
-                        {editingRequest ? "Ajustar Solicitação" : "Solicitar Novo Analista"}
-                      </h2>
-                      <p className="text-slate-500 text-sm">
-                        {editingRequest 
-                          ? "Corrija os dados abaixo conforme o feedback e reenvie para aprovação." 
-                          : "Preencha os dados abaixo para solicitar a criação de um novo analista. A solicitação passará por aprovação."}
-                      </p>
-                      {editingRequest?.rejectionReason && (
-                        <div className="mt-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3">
-                          <AlertCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-xs font-bold text-rose-600 uppercase tracking-widest mb-1">Motivo da Reprovação</p>
-                            <p className="text-sm text-rose-700">{editingRequest.rejectionReason}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-8">
-                      <form key={editingRequest?.id || 'new_request'} onSubmit={handleRequestAccess} className="space-y-6">
-                        {analystFields.map(field => {
-                          const defaultValue = editingRequest?.analystData[field.id] || '';
-                          
-                          if (field.id === 'name') {
-                            return (
-                              <div key={field.id}>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                  {field.label}
-                                </label>
-                                <input name="name" required defaultValue={defaultValue} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: João Silva" />
-                              </div>
-                            );
-                          }
-                          if (field.id === 'email') {
-                            return (
-                              <div key={field.id}>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                  {field.label}
-                                </label>
-                                <input name="email" type="email" required defaultValue={defaultValue} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="joao.silva@empresa.com" />
-                              </div>
-                            );
-                          }
-                          if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
-                            return (
-                              <div key={field.id}>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                  {field.label}
-                                </label>
-                                <select name={field.id} required defaultValue={defaultValue} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all">
-                                  <option value="">Selecione uma esteira</option>
-                                  {tracks.map(track => (
-                                    <option key={track.id} value={track.name}>{track.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            );
-                          }
-                          return (
-                            <div key={field.id}>
-                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                {field.label}
-                              </label>
-                              <input 
-                                name={field.id} 
-                                defaultValue={defaultValue}
-                                required
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
-                                placeholder={field.description}
-                              />
-                            </div>
-                          );
-                        })}
-
-                        <div className="pt-4 border-t border-slate-100">
-                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
-                            Sistemas Necessários
-                          </label>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                            {systems.map(system => (
-                              <label 
-                                key={system.id} 
-                                className={cn(
-                                  "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer",
-                                  selectedSystemsInForm.includes(system.id)
-                                    ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                                    : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50"
-                                )}
-                              >
-                                <input 
-                                  type="checkbox"
-                                  className="hidden"
-                                  checked={selectedSystemsInForm.includes(system.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedSystemsInForm([...selectedSystemsInForm, system.id]);
-                                    } else {
-                                      setSelectedSystemsInForm(selectedSystemsInForm.filter(id => id !== system.id));
-                                    }
-                                  }}
-                                />
-                                <div className={cn(
-                                  "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
-                                  selectedSystemsInForm.includes(system.id)
-                                    ? "bg-indigo-600 border-indigo-600 text-white"
-                                    : "bg-white border-slate-300"
-                                )}>
-                                  {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3" />}
-                                </div>
-                                <span className="text-sm font-medium">{system.name}</span>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="flex gap-3 pt-6">
-                          <button 
-                            type="button" 
-                            onClick={() => { 
-                              if (editingRequest) {
-                                setRequestSubTab('my');
-                                setEditingRequest(null);
-                                setSelectedSystemsInForm([]);
-                              } else {
-                                setActiveTab('dashboard'); 
-                                setSelectedSystemsInForm([]); 
-                              }
-                            }} 
-                            className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                          <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">
-                            {editingRequest ? "Reenviar Solicitação" : "Enviar Solicitação"}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {requests
-                      .filter(r => r.requestedBy === user?.uid && r.status !== 'approved')
-                      .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
-                      .map(request => (
-                        <div key={request.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition-shadow">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm">
-                                {getAnalystInitials(request.analystData)}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-bold text-slate-800 text-sm truncate max-w-[150px]">{getAnalystDisplayName(request.analystData)}</h3>
-                                  <span className="text-[10px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">{request.requestNumber}</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{new Date(request.requestedAt).toLocaleDateString('pt-BR')}</p>
-                              </div>
-                            </div>
-                            <div className={cn(
-                              "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                              request.status === 'pending' ? "bg-amber-50 text-amber-600 border border-amber-100" :
-                              request.status === 'approved' ? "bg-emerald-50 text-emerald-600 border border-emerald-100" :
-                              "bg-rose-50 text-rose-600 border border-rose-100"
-                            )}>
-                              {request.status === 'pending' ? 'Pendente' : request.status === 'approved' ? 'Aprovado' : 'Reprovado'}
-                            </div>
-                          </div>
-
-                          {request.status === 'rejected' && request.rejectionReason && (
-                            <div className="mb-4 p-3 bg-rose-50/50 rounded-xl border border-rose-100/50">
-                              <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest mb-1">Motivo da Reprovação:</p>
-                              <p className="text-xs text-rose-700 line-clamp-2">{request.rejectionReason}</p>
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                              {request.type === 'status_change' ? 'Mudança de Status' : `${request.systemIds?.length || 0} ${request.systemIds?.length === 1 ? 'Sistema' : 'Sistemas'}`}
-                            </span>
-                            {request.status === 'rejected' && request.type !== 'status_change' && (
-                              <button 
-                                onClick={() => {
-                                  setEditingRequest(request);
-                                  setSelectedSystemsInForm(request.systemIds || []);
-                                  setRequestSubTab('new');
-                                }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 transition-colors"
-                              >
-                                <Edit2 className="w-3 h-3" />
-                                Ajustar
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    
-                    {requests.filter(r => r.requestedBy === user?.uid && r.status !== 'approved').length === 0 && (
-                      <div className="col-span-full bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center">
-                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <PlusCircle className="w-8 h-8 text-slate-200" />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-800">Nenhuma solicitação encontrada</h3>
-                        <p className="text-slate-500">Você ainda não realizou nenhuma solicitação.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </motion.div>
+                requestSubTab={requestSubTab}
+                setRequestSubTab={setRequestSubTab}
+                editingRequest={editingRequest}
+                setEditingRequest={setEditingRequest}
+                selectedSystemsInForm={selectedSystemsInForm}
+                setSelectedSystemsInForm={setSelectedSystemsInForm}
+                analystFields={analystFields}
+                tracks={tracks}
+                systems={systems}
+                requests={requests}
+                user={user}
+                handleRequestAccess={handleRequestAccess}
+                setActiveTab={setActiveTab}
+                getAnalystInitials={getAnalystInitials}
+                getAnalystDisplayName={getAnalystDisplayName}
+              />
             )}
 
             {activeTab === 'approvals' && (
-              <motion.div 
+              <ApprovalsTab 
                 key="approvals"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-slate-800">Aprovações Pendentes</h2>
-                    <p className="text-slate-500">Analise e aprove as solicitações de novos analistas.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {requests
-                    .filter(r => r.status === 'pending')
-                    .sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime())
-                    .map(request => (
-                      <div key={request.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
-                            {getAnalystInitials(request.analystData)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-bold text-slate-800 truncate">{getAnalystDisplayName(request.analystData)}</h3>
-                              <span className="text-[9px] font-mono bg-indigo-50 px-1 py-0.5 rounded text-indigo-500">{request.requestNumber}</span>
-                            </div>
-                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{new Date(request.requestedAt).toLocaleDateString('pt-BR')}</p>
-                          </div>
-                        </div>
-                        
-                        <button 
-                          onClick={() => setSelectedRequestForApproval(request)}
-                          className="w-full py-2.5 bg-slate-50 text-indigo-600 font-bold text-sm rounded-xl border border-slate-100 hover:bg-indigo-50 hover:border-indigo-100 transition-all"
-                        >
-                          Detalhes
-                        </button>
-                      </div>
-                    ))}
-                  
-                  {requests.filter(r => r.status === 'pending').length === 0 && (
-                    <div className="col-span-full bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center">
-                      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <ClipboardCheck className="w-8 h-8 text-slate-200" />
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-800">Nenhuma solicitação pendente</h3>
-                      <p className="text-slate-500">Todas as solicitações foram processadas.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Approval Details Modal */}
-                <AnimatePresence>
-                  {selectedRequestForApproval && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                      <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        onClick={() => setSelectedRequestForApproval(null)}
-                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                      />
-                      <motion.div 
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className="relative w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
-                      >
-                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
-                              {getAnalystInitials(selectedRequestForApproval.analystData)}
-                            </div>
-                            <div>
-                              <h3 className="font-bold text-slate-800">{getAnalystDisplayName(selectedRequestForApproval.analystData)}</h3>
-                              <p className="text-xs text-slate-500">{getAnalystEmail(selectedRequestForApproval.analystData)}</p>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => setSelectedRequestForApproval(null)}
-                            className="p-2 hover:bg-slate-200 rounded-full transition-colors"
-                          >
-                            <X className="w-6 h-6 text-slate-400" />
-                          </button>
-                        </div>
-
-                        <div className="p-8 overflow-y-auto flex-1 space-y-8">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            {selectedRequestForApproval.type === 'status_change' ? (
-                              <div className="col-span-full">
-                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Mudança de Status de Acesso</h4>
-                                <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-center justify-between">
-                                  <div>
-                                    <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Sistema</p>
-                                    <p className="font-bold text-slate-800">
-                                      {systems.find(s => s.id === selectedRequestForApproval.statusChangeData?.systemId)?.name || selectedRequestForApproval.statusChangeData?.systemId}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-4">
-                                    <div className="text-center">
-                                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">De</p>
-                                      <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded uppercase">
-                                        {selectedRequestForApproval.statusChangeData?.oldStatus}
-                                      </span>
-                                    </div>
-                                    <ChevronRight className="w-4 h-4 text-slate-300" />
-                                    <div className="text-center">
-                                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-1">Para</p>
-                                      <span className="px-2 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded uppercase">
-                                        {selectedRequestForApproval.statusChangeData?.newStatus}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ) : (
-                              <>
-                                <div>
-                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Dados do Analista</h4>
-                                  <div className="space-y-3">
-                                    <div className="flex justify-between text-sm">
-                                      <span className="text-slate-500">Esteira:</span>
-                                      <span className="font-bold text-slate-700">{getAnalystTrack(selectedRequestForApproval.analystData)}</span>
-                                    </div>
-                                    {analystFields
-                                      .filter(f => !['name', 'email', 'track', 'email_interfile', 'esteira'].includes(f.id) && !f.id.toLowerCase().includes('esteira') && selectedRequestForApproval.analystData[f.id])
-                                      .map(field => (
-                                        <div key={field.id} className="flex justify-between text-sm">
-                                          <span className="text-slate-500">{field.label}:</span>
-                                          <span className="font-bold text-slate-700">{selectedRequestForApproval.analystData[field.id]}</span>
-                                        </div>
-                                      ))}
-                                  </div>
-                                </div>
-                                <div>
-                                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Sistemas Solicitados</h4>
-                                  <div className="flex flex-wrap gap-2">
-                                    {selectedRequestForApproval.systemIds?.map(sid => {
-                                      const system = systems.find(s => s.id === sid);
-                                      return (
-                                        <span key={sid} className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-full border border-indigo-100">
-                                          {system?.name || sid}
-                                        </span>
-                                      );
-                                    })}
-                                    {(!selectedRequestForApproval.systemIds || selectedRequestForApproval.systemIds.length === 0) && (
-                                      <span className="text-xs text-slate-400 italic">Nenhum sistema solicitado.</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </div>
-
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <div className="flex flex-col gap-1">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Solicitado por</span>
-                              <span className="text-sm font-bold text-slate-700">{selectedRequestForApproval.requestedByName}</span>
-                              <span className="text-[10px] text-slate-400">{new Date(selectedRequestForApproval.requestedAt).toLocaleString('pt-BR')}</span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-3">
-                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
-                              Motivo da Rejeição (Obrigatório para reprovar)
-                            </label>
-                            <textarea 
-                              value={rejectionReason}
-                              onChange={(e) => setRejectionReason(e.target.value)}
-                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm min-h-[100px]"
-                              placeholder="Explique o motivo da reprovação..."
-                            />
-                          </div>
-                        </div>
-
-                        <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
-                          <button 
-                            onClick={() => handleRejectRequest(selectedRequestForApproval.id, rejectionReason)}
-                            className="flex-1 px-4 py-4 bg-white text-rose-600 border border-rose-200 font-bold rounded-2xl hover:bg-rose-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={!rejectionReason.trim()}
-                          >
-                            Rejeitar
-                          </button>
-                          <button 
-                            onClick={() => handleApproveRequest(selectedRequestForApproval)}
-                            className="flex-1 px-4 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-                          >
-                            {selectedRequestForApproval.type === 'status_change' ? 'Aprovar Mudança' : 'Aprovar Criação'}
-                          </button>
-                        </div>
-                      </motion.div>
-                    </div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                requests={requests}
+                systems={systems}
+                analystFields={analystFields}
+                selectedRequestForApproval={selectedRequestForApproval}
+                setSelectedRequestForApproval={setSelectedRequestForApproval}
+                rejectionReason={rejectionReason}
+                setRejectionReason={setRejectionReason}
+                handleApproveRequest={handleApproveRequest}
+                handleRejectRequest={handleRejectRequest}
+                getAnalystInitials={getAnalystInitials}
+                getAnalystDisplayName={getAnalystDisplayName}
+                getAnalystEmail={getAnalystEmail}
+                getAnalystTrack={getAnalystTrack}
+              />
             )}
             {activeTab === 'extract' && (
-              <motion.div 
+              <ExtractTab 
                 key="extract"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="space-y-6 max-w-4xl mx-auto"
-              >
-                <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-8 border-b border-slate-100">
-                    <h2 className="text-2xl font-bold text-slate-800">Exportação de Dados</h2>
-                    <p className="text-slate-500">Extraia as bases de dados do sistema em formato CSV para auditoria ou backup.</p>
-                  </div>
-                  
-                  <div className="p-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <button 
-                      onClick={() => handleExportData('analysts')}
-                      className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-                    >
-                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                        <Users className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800">Base de Analistas</h3>
-                        <p className="text-xs text-slate-500">Dados cadastrais de todos os analistas.</p>
-                      </div>
-                    </button>
-
-                    <button 
-                      onClick={() => handleExportData('systems')}
-                      className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-                    >
-                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                        <Monitor className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800">Base de Sistemas</h3>
-                        <p className="text-xs text-slate-500">Lista de sistemas e suas descrições.</p>
-                      </div>
-                    </button>
-
-                    <button 
-                      onClick={() => handleExportData('users')}
-                      className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-                    >
-                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                        <ShieldCheck className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800">Base de Usuários</h3>
-                        <p className="text-xs text-slate-500">Usuários do sistema e suas permissões.</p>
-                      </div>
-                    </button>
-
-                    <button 
-                      onClick={() => handleExportData('tracks')}
-                      className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-                    >
-                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                        <ChevronRight className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800">Base de Esteiras</h3>
-                        <p className="text-xs text-slate-500">Lista de todas as esteiras cadastradas.</p>
-                      </div>
-                    </button>
-
-                    <button 
-                      onClick={() => handleExportData('accesses')}
-                      className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-                    >
-                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                        <CheckCircle2 className="w-6 h-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-800">Matriz de Acessos</h3>
-                        <p className="text-xs text-slate-500">Relatório completo de qual analista tem acesso a qual sistema.</p>
-                      </div>
-                    </button>
-
-                    {hasPermission('extract_logs') && (
-                      <div className="col-span-full mt-4 p-6 bg-indigo-50/50 rounded-[2rem] border border-indigo-100">
-                        <div className="flex flex-col md:flex-row md:items-end gap-6">
-                          <div className="flex-1 space-y-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <FileText className="w-5 h-5 text-indigo-600" />
-                              <h3 className="font-bold text-slate-800">Exportação de Logs de Auditoria</h3>
-                            </div>
-                            
-                            <div className="flex flex-wrap gap-4">
-                              <label className="flex items-center gap-2 cursor-pointer group">
-                                <div className="relative flex items-center">
-                                  <input 
-                                    type="checkbox" 
-                                    checked={logExportAllTime}
-                                    onChange={(e) => setLogExportAllTime(e.target.checked)}
-                                    className="peer sr-only"
-                                  />
-                                  <div className="w-5 h-5 border-2 border-slate-300 rounded-md peer-checked:bg-indigo-600 peer-checked:border-indigo-600 transition-all" />
-                                  <Check className="w-3.5 h-3.5 text-white absolute left-0.5 opacity-0 peer-checked:opacity-100 transition-opacity" />
-                                </div>
-                                <span className="text-sm font-medium text-slate-600 group-hover:text-indigo-600 transition-colors">Toda a base histórica</span>
-                              </label>
-                            </div>
-
-                            {!logExportAllTime && (
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <div className="space-y-1.5">
-                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Data Início</label>
-                                  <input 
-                                    type="date" 
-                                    value={logExportStartDate}
-                                    onChange={(e) => setLogExportStartDate(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
-                                  />
-                                </div>
-                                <div className="space-y-1.5">
-                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Data Fim</label>
-                                  <input 
-                                    type="date" 
-                                    value={logExportEndDate}
-                                    onChange={(e) => setLogExportEndDate(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <button 
-                            onClick={() => handleExportData('logs')}
-                            className="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-3 min-w-[200px]"
-                          >
-                            <Download className="w-5 h-5" />
-                            Exportar Logs
-                          </button>
-                        </div>
-                        <p className="mt-4 text-[11px] text-slate-400 italic">
-                          {logExportAllTime 
-                            ? "Serão exportados todos os registros desde o início da operação." 
-                            : `Exportando registros de ${logExportStartDate || 'o início'} até ${logExportEndDate || 'hoje'}.`}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="p-8 bg-slate-50 border-t border-slate-100">
-                    <div className="flex items-start gap-3 text-amber-600 bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                      <div className="text-xs">
-                        <p className="font-bold uppercase mb-1">Aviso de Segurança</p>
-                        <p>As extrações contêm dados sensíveis. Certifique-se de armazenar esses arquivos em locais seguros e de acordo com as políticas de proteção de dados da empresa.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
+                handleExportData={handleExportData}
+                hasPermission={hasPermission}
+                logExportAllTime={logExportAllTime}
+                setLogExportAllTime={setLogExportAllTime}
+                logExportStartDate={logExportStartDate}
+                setLogExportStartDate={setLogExportStartDate}
+                logExportEndDate={logExportEndDate}
+                setLogExportEndDate={setLogExportEndDate}
+              />
             )}
             {activeTab === 'settings' && (
-              <motion.div 
+              <SettingsTab
                 key="settings"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="max-w-4xl mx-auto space-y-8"
-              >
-                {hasPermission('settings_analyst_fields') && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                      <div>
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                          <Users className="w-5 h-5 text-indigo-600" />
-                          Definição de Analista
-                        </h3>
-                        <p className="text-sm text-slate-500">Personalize os rótulos e descrições dos campos do analista.</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => {
-                            if (isReorderingAnalystFields) {
-                              set(ref(db, 'config/analystFields'), tempAnalystFields.map(f => ({ id: f.id, label: f.label, description: f.description })));
-                            } else {
-                              setTempAnalystFields(analystFields);
-                            }
-                            setIsReorderingAnalystFields(!isReorderingAnalystFields);
-                          }}
-                          className={`p-2 rounded-xl transition-all flex items-center gap-2 text-sm font-bold ${
-                            isReorderingAnalystFields 
-                              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                        >
-                          {isReorderingAnalystFields ? (
-                            <>
-                              <Check className="w-4 h-4" />
-                              Salvar Ordem
-                            </>
-                          ) : (
-                            <>
-                              <Move className="w-4 h-4" />
-                              Reordenar
-                            </>
-                          )}
-                        </button>
-                        {!isReorderingAnalystFields && (
-                          <button 
-                            onClick={() => setIsAddingField({ type: 'analyst' })}
-                            className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
-                          >
-                            <Plus className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {isReorderingAnalystFields ? (
-                      <Reorder.Group 
-                        axis="y" 
-                        values={tempAnalystFields} 
-                        onReorder={setTempAnalystFields}
-                        className="p-6 space-y-3"
-                      >
-                        {tempAnalystFields.map((field) => (
-                          <DraggableFieldItem 
-                            key={field.id}
-                            field={field}
-                            isReordering={true}
-                            onEdit={(f) => setEditingField({ type: 'analyst', field: f })}
-                            onDelete={(id) => deleteField('analyst', id)}
-                          />
-                        ))}
-                      </Reorder.Group>
-                    ) : (
-                      <div className="p-6 space-y-3">
-                        {analystFields.map((field) => (
-                          <DraggableFieldItem 
-                            key={field.id}
-                            field={field}
-                            isReordering={false}
-                            onEdit={(f) => setEditingField({ type: 'analyst', field: f })}
-                            onDelete={(id) => deleteField('analyst', id)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {hasPermission('settings_system_fields') && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                      <div>
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                          <Monitor className="w-5 h-5 text-indigo-600" />
-                          Definição de Sistema
-                        </h3>
-                        <p className="text-sm text-slate-500">Personalize os rótulos e descrições dos campos do sistema.</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={() => {
-                            if (isReorderingSystemFields) {
-                              set(ref(db, 'config/systemFields'), tempSystemFields.map(f => ({ id: f.id, label: f.label, description: f.description })));
-                            } else {
-                              setTempSystemFields(systemFields);
-                            }
-                            setIsReorderingSystemFields(!isReorderingSystemFields);
-                          }}
-                          className={`p-2 rounded-xl transition-all flex items-center gap-2 text-sm font-bold ${
-                            isReorderingSystemFields 
-                              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' 
-                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                        >
-                          {isReorderingSystemFields ? (
-                            <>
-                              <Check className="w-4 h-4" />
-                              Salvar Ordem
-                            </>
-                          ) : (
-                            <>
-                              <Move className="w-4 h-4" />
-                              Reordenar
-                            </>
-                          )}
-                        </button>
-                        {!isReorderingSystemFields && (
-                          <button 
-                            onClick={() => setIsAddingField({ type: 'system' })}
-                            className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
-                          >
-                            <Plus className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {isReorderingSystemFields ? (
-                      <Reorder.Group 
-                        axis="y" 
-                        values={tempSystemFields} 
-                        onReorder={setTempSystemFields}
-                        className="p-6 space-y-3"
-                      >
-                        {tempSystemFields.map((field) => (
-                          <DraggableFieldItem 
-                            key={field.id}
-                            field={field}
-                            isReordering={true}
-                            onEdit={(f) => setEditingField({ type: 'system', field: f })}
-                            onDelete={(id) => deleteField('system', id)}
-                          />
-                        ))}
-                      </Reorder.Group>
-                    ) : (
-                      <div className="p-6 space-y-3">
-                        {systemFields.map((field) => (
-                          <DraggableFieldItem 
-                            key={field.id}
-                            field={field}
-                            isReordering={false}
-                            onEdit={(f) => setEditingField({ type: 'system', field: f })}
-                            onDelete={(id) => deleteField('system', id)}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {hasPermission('settings_tracks') && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                      <div>
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                          <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                          Gestão de Esteiras
-                        </h3>
-                        <p className="text-sm text-slate-500">Gerencie as esteiras disponíveis para seleção.</p>
-                      </div>
-                      <button 
-                        onClick={() => setIsAddingTrack(true)}
-                        className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="p-6">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {tracks.map(track => (
-                          <div key={track.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                            <span className="text-sm font-bold text-slate-700 truncate">{track.name}</span>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button 
-                                onClick={() => setEditingTrack(track)}
-                                className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-                                title="Editar Esteira"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => deleteTrack(track)}
-                                className="p-2 bg-white border border-slate-200 text-rose-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-                                title="Excluir Esteira"
-                              >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* User Management Section */}
-                {hasPermission('settings_users') && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-                          <div>
-                              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                  <Users className="w-5 h-5 text-indigo-600" />
-                                  Gestão de Usuários
-                              </h3>
-                              <p className="text-sm text-slate-500">Controle quem tem acesso ao sistema.</p>
-                          </div>
-                          <div className="flex items-center gap-3 w-full sm:w-auto">
-                              <div className="relative flex-1 sm:flex-initial">
-                                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                  <input 
-                                      type="text" 
-                                      placeholder="Buscar usuário..." 
-                                      value={userSearchQuery}
-                                      onChange={(e) => setUserSearchQuery(e.target.value)}
-                                      className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full sm:w-64"
-                                  />
-                              </div>
-                              <button 
-                                  onClick={() => setIsAddingUser(true)}
-                                  className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
-                              >
-                                  <Plus className="w-5 h-5" />
-                              </button>
-                          </div>
-                      </div>
-                      <div className="p-6">
-                          <div className="space-y-3">
-                              {users
-                                  .filter(user => 
-                                      user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                                      user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
-                                  )
-                                  .slice(0, usersLimit)
-                                  .map(user => {
-                                  const role = roles.find(r => r.id === user.roleId);
-                                  return (
-                                      <div key={user.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                          <div>
-                                              <p className="font-bold text-slate-800">{user.name}</p>
-                                              <p className="text-xs text-slate-500">{user.email}</p>
-                                          </div>
-                                          <div className="flex items-center gap-3">
-                                              <span className="px-3 py-1 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-600">
-                                                  {role?.name || 'Sem Perfil'}
-                                              </span>
-                                              <div className="flex gap-1">
-                                                  <button 
-                                                      onClick={() => resetUserPassword(user.id)}
-                                                      className="p-2 bg-white border border-slate-200 text-amber-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-                                                      title="Forçar redefinição de senha"
-                                                  >
-                                                      <Key className="w-4 h-4" />
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => { setEditingUser(user); setIsAddingUser(true); }}
-                                                      className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-                                                      title="Editar usuário"
-                                                  >
-                                                      <Edit2 className="w-4 h-4" />
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => deleteUser(user.id)}
-                                                      className="p-2 bg-white border border-slate-200 text-rose-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-                                                      title="Excluir usuário"
-                                                  >
-                                                      <Trash2 className="w-4 h-4" />
-                                                  </button>
-                                              </div>
-                                          </div>
-                                      </div>
-                                  );
-                              })}
-                              {users.length === 0 && (
-                                  <p className="text-center text-slate-400 py-4">Nenhum usuário cadastrado.</p>
-                              )}
-                              {users.length > 0 && users.filter(user => 
-                                  user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                                  user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
-                              ).length === 0 && (
-                                  <p className="text-center text-slate-400 py-4">Nenhum usuário encontrado para a busca.</p>
-                              )}
-                              {users.filter(user => 
-                                  user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                                  user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
-                              ).length > usersLimit && (
-                                  <div className="flex justify-center mt-4 pt-4 border-t border-slate-100">
-                                      <button 
-                                          onClick={() => setUsersLimit(prev => prev + 10)}
-                                          className="px-6 py-2 bg-slate-50 text-indigo-600 font-bold rounded-full hover:bg-slate-100 transition-colors border border-slate-200"
-                                      >
-                                          Carregar mais
-                                      </button>
-                                  </div>
-                              )}
-                          </div>
-                      </div>
-                  </div>
-                )}
-
-                {/* Role Management Section */}
-                {hasPermission('settings_roles') && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                          <div>
-                              <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                  <ShieldCheck className="w-5 h-5 text-indigo-600" />
-                                  Perfis de Acesso
-                              </h3>
-                              <p className="text-sm text-slate-500">Defina as permissões de cada função.</p>
-                          </div>
-                          <button 
-                              onClick={() => setIsAddingRole(true)}
-                              className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
-                          >
-                              <Plus className="w-5 h-5" />
-                          </button>
-                      </div>
-                      <div className="p-6">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {roles.map(role => (
-                                  <div key={role.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 relative group">
-                                      <div className="flex justify-between items-start mb-2">
-                                          <h4 className="font-bold text-slate-800">{role.name}</h4>
-                                          <div className="flex gap-1">
-                                              <button 
-                                                  onClick={() => { setEditingRole(role); setIsAddingRole(true); }}
-                                                  className="p-1.5 bg-white border border-slate-200 text-indigo-600 rounded-lg shadow-sm active:scale-95 transition-all cursor-pointer"
-                                              >
-                                                  <Edit2 className="w-3.5 h-3.5" />
-                                              </button>
-                                              <button 
-                                                  onClick={() => deleteRole(role)}
-                                                  disabled={role.isSystem}
-                                                  className={`p-1.5 bg-white border border-slate-200 rounded-lg shadow-sm active:scale-95 transition-all ${role.isSystem ? 'text-slate-300 cursor-not-allowed' : 'text-rose-500 cursor-pointer'}`}
-                                                  title={role.isSystem ? "Perfis de sistema não podem ser excluídos" : "Excluir Perfil"}
-                                              >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                              </button>
-                                          </div>
-                                      </div>
-                                      <div className="flex flex-wrap gap-1">
-                                          {role.permissions.slice(0, 3).map(p => (
-                                              <span key={p} className="px-2 py-0.5 bg-white border border-slate-200 rounded text-[10px] text-slate-500 truncate max-w-full">
-                                                  {PERMISSIONS_LABELS[p]}
-                                              </span>
-                                          ))}
-                                          {role.permissions.length > 3 && (
-                                              <span className="px-2 py-0.5 bg-slate-200 rounded text-[10px] text-slate-600">
-                                                  +{role.permissions.length - 3}
-                                              </span>
-                                          )}
-                                      </div>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                  </div>
-                )}
-              </motion.div>
+                hasPermission={hasPermission}
+                isReorderingAnalystFields={isReorderingAnalystFields}
+                setIsReorderingAnalystFields={setIsReorderingAnalystFields}
+                tempAnalystFields={tempAnalystFields}
+                setTempAnalystFields={setTempAnalystFields}
+                analystFields={analystFields}
+                setEditingField={setEditingField}
+                deleteField={deleteField}
+                setIsAddingField={setIsAddingField}
+                isReorderingSystemFields={isReorderingSystemFields}
+                setIsReorderingSystemFields={setIsReorderingSystemFields}
+                tempSystemFields={tempSystemFields}
+                setTempSystemFields={setTempSystemFields}
+                systemFields={systemFields}
+                tracks={tracks}
+                setIsAddingTrack={setIsAddingTrack}
+                setEditingTrack={setEditingTrack}
+                deleteTrack={deleteTrack}
+                users={users}
+                userSearchQuery={userSearchQuery}
+                setUserSearchQuery={setUserSearchQuery}
+                usersLimit={usersLimit}
+                setUsersLimit={setUsersLimit}
+                setIsAddingUser={setIsAddingUser}
+                resetUserPassword={resetUserPassword}
+                setEditingUser={setEditingUser}
+                deleteUser={deleteUser}
+                roles={roles}
+                setIsAddingRole={setIsAddingRole}
+                setEditingRole={setEditingRole}
+                deleteRole={deleteRole}
+              />
             )}
           </AnimatePresence>
         </div>
@@ -4351,529 +2532,104 @@ export default function App() {
           </div>
         )}
 
-        {(isAddingAnalyst || editingAnalyst) && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-[95vw] h-[95vh] flex flex-col overflow-hidden"
-            >
-              <div className="p-6 md:p-8 border-b border-slate-100 flex justify-between items-center shrink-0">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-800 mb-1">{editingAnalyst ? 'Editar Analista' : 'Novo Analista'}</h2>
-                  <p className="text-slate-500 text-sm">{editingAnalyst ? 'Atualize os dados do analista.' : 'Cadastre um novo membro na equipe de operação.'}</p>
-                </div>
-                <button 
-                  onClick={() => {
-                    setIsAddingAnalyst(false);
-                    setEditingAnalyst(null);
-                    setSystemSearchQuery('');
-                  }}
-                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                <form id="analyst-form" key={editingAnalyst?.id || 'new_analyst'} onSubmit={handleAddAnalyst} className="space-y-8">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Dados do Analista</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {analystFields.map(field => {
-                        if (field.id === 'name') {
-                          return (
-                            <div key={field.id}>
-                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                {field.label}
-                              </label>
-                              <input name="name" defaultValue={editingAnalyst?.name} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="Ex: João Silva" />
-                            </div>
-                          );
-                        }
-                        if (field.id === 'email') {
-                          return (
-                            <div key={field.id}>
-                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                {field.label}
-                              </label>
-                              <input name="email" type="email" defaultValue={editingAnalyst?.email} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="joao.silva@empresa.com" />
-                            </div>
-                          );
-                        }
-                        if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
-                          return (
-                            <div key={field.id}>
-                              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                {field.label}
-                              </label>
-                              <select name={field.id} defaultValue={getAnalystTrack(editingAnalyst)} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
-                                {tracks.slice().sort((a, b) => a.name.localeCompare(b.name)).map(track => (
-                                  <option key={track.id} value={track.name}>{track.name}</option>
-                                ))}
-                              </select>
-                            </div>
-                          );
-                        }
-                        // Fallback for custom fields
-                        return (
-                          <div key={field.id}>
-                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                              {field.label}
-                            </label>
-                            <input 
-                              name={field.id} 
-                              defaultValue={editingAnalyst?.[field.id] || ''} 
-                              disabled={!canManageAnalysts} 
-                              autoComplete="new-password"
-                              required
-                              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
-                              placeholder={field.description}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+        <AnalystModal
+          isOpen={isAddingAnalyst || !!editingAnalyst}
+          editingAnalyst={editingAnalyst}
+          onClose={() => {
+            setIsAddingAnalyst(false);
+            setEditingAnalyst(null);
+          }}
+          analystFields={analystFields}
+          tracks={tracks}
+          systems={systems}
+          accesses={accesses}
+          canManageAnalysts={canManageAnalysts}
+          canManageAccess={canManageAccess}
+          user={user}
+          logAction={logAction}
+          getAnalystDisplayName={getAnalystDisplayName}
+          getAnalystTrack={getAnalystTrack}
+          showToast={showToast}
+        />
 
-                  <div>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-2 mb-4">
-                      <h3 className="text-sm font-bold text-slate-800">Sistemas Utilizados</h3>
-                      <div className="relative w-full sm:w-64">
-                        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input 
-                          type="text" 
-                          placeholder="Buscar sistema..." 
-                          value={systemSearchQuery}
-                          onChange={(e) => setSystemSearchQuery(e.target.value)}
-                          className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                      {systems
-                        .filter(system => system.name.toLowerCase().includes(systemSearchQuery.toLowerCase()))
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map(system => (
-                        <label 
-                          key={system.id} 
-                          className={cn(
-                            "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer",
-                            selectedSystemsInForm.includes(system.id)
-                              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                              : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50",
-                            (!canManageAccess && !canManageAnalysts) && "opacity-50 cursor-not-allowed pointer-events-none"
-                          )}
-                        >
-                          <input 
-                            type="checkbox"
-                            className="hidden"
-                            checked={selectedSystemsInForm.includes(system.id)}
-                            disabled={!canManageAccess && !canManageAnalysts}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedSystemsInForm([...selectedSystemsInForm, system.id]);
-                              } else {
-                                setSelectedSystemsInForm(selectedSystemsInForm.filter(id => id !== system.id));
-                              }
-                            }}
-                          />
-                          <div className={cn(
-                            "w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0",
-                            selectedSystemsInForm.includes(system.id)
-                              ? "bg-indigo-600 border-indigo-600"
-                              : "border-slate-300 bg-white"
-                          )}>
-                            {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3 text-white" />}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="text-sm font-bold block truncate">{system.name}</span>
-                            <span className="text-xs opacity-70 block truncate">{system.description}</span>
-                          </div>
-                        </label>
-                      ))}
-                      {systems.filter(system => system.name.toLowerCase().includes(systemSearchQuery.toLowerCase())).length === 0 && (
-                        <div className="col-span-full text-center py-8 text-slate-400 text-sm">
-                          Nenhum sistema encontrado.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {editingAnalyst && (
-                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 mt-6">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Data de Criação</label>
-                        <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                          {editingAnalyst.createdAt ? new Date(editingAnalyst.createdAt).toLocaleDateString('pt-BR') : 'N/A'}
-                        </p>
-                      </div>
-                      {editingAnalyst.deactivatedAt && (
-                        <div>
-                          <label className="block text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Data de Desligamento</label>
-                          <p className="text-sm text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-100 font-bold">
-                            {new Date(editingAnalyst.deactivatedAt).toLocaleDateString('pt-BR')}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </form>
-              </div>
-              
-              <div className="p-6 md:p-8 border-t border-slate-100 flex gap-3 shrink-0 bg-slate-50">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setIsAddingAnalyst(false);
-                    setEditingAnalyst(null);
-                    setSystemSearchQuery('');
-                  }}
-                  className="flex-1 px-4 py-3 bg-white text-slate-600 font-bold rounded-xl hover:bg-slate-100 transition-colors border border-slate-200"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  form="analyst-form"
-                  className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-                >
-                  {editingAnalyst ? 'Salvar Alterações' : 'Criar Analista'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <SystemModal
+          isOpen={isAddingSystem || !!editingSystem}
+          editingSystem={editingSystem}
+          onClose={() => {
+            setIsAddingSystem(false);
+            setEditingSystem(null);
+          }}
+          systemFields={systemFields}
+          canManageSystems={canManageSystems}
+          user={user}
+          logAction={logAction}
+        />
 
-        {(isAddingSystem || editingSystem) && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[70vh] overflow-y-auto"
-            >
-              <div className="p-8">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingSystem ? 'Editar Sistema' : 'Novo Sistema'}</h2>
-                <p className="text-slate-500 text-sm mb-6">{editingSystem ? 'Atualize os dados do sistema.' : 'Adicione uma nova ferramenta ao catálogo da operação.'}</p>
-                
-                <form onSubmit={handleAddSystem} key={editingSystem?.id || 'new_system'} className="space-y-4">
-                  {systemFields.map(field => {
-                    if (field.id === 'name') {
-                      return (
-                        <div key={field.id}>
-                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                            {field.label}
-                          </label>
-                          <input name="name" defaultValue={editingSystem?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Salesforce" />
-                        </div>
-                      );
-                    }
-                    if (field.id === 'description') {
-                      return (
-                        <div key={field.id}>
-                          <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                            {field.label}
-                          </label>
-                          <textarea name="description" defaultValue={editingSystem?.description} required rows={3} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Para que serve este sistema?" />
-                        </div>
-                      );
-                    }
-                    // Fallback for custom fields
-                    return (
-                      <div key={field.id}>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                          {field.label}
-                        </label>
-                        <input 
-                          name={field.id} 
-                          defaultValue={editingSystem?.[field.id] || ''} 
-                          autoComplete="new-password"
-                          required
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
-                          placeholder={field.description}
-                        />
-                      </div>
-                    );
-                  })}
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => { setIsAddingSystem(false); setEditingSystem(null); }} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <FieldModal
+          isAddingField={isAddingField}
+          editingField={editingField}
+          onClose={() => {
+            setIsAddingField(null);
+            setEditingField(null);
+          }}
+          analystFields={analystFields}
+          systemFields={systemFields}
+          hasPermission={hasPermission}
+          user={user}
+          logAction={logAction}
+          showToast={showToast}
+        />
 
-        {isAddingField && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[70vh] overflow-y-auto"
-            >
-              <div className="p-8">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Novo Campo</h2>
-                <p className="text-slate-500 text-sm mb-6">Adicione um novo campo personalizado.</p>
-                
-                <form key={isAddingField?.type || 'new_field'} onSubmit={handleAddField} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">ID do Campo</label>
-                    <input name="id" required pattern="[a-z0-9_]+" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="ex: data_nascimento (apenas letras minúsculas e _)" />
-                    <p className="text-[10px] text-slate-400 mt-1">Usado internamente. Não pode ser alterado depois.</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Rótulo (Label)</label>
-                    <input name="label" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Data de Nascimento" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
-                    <input name="description" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Data de nascimento do colaborador" />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => setIsAddingField(null)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <TrackModal
+          isAddingTrack={isAddingTrack}
+          editingTrack={editingTrack}
+          onClose={() => {
+            setIsAddingTrack(false);
+            setEditingTrack(null);
+          }}
+          user={user}
+          analysts={analysts}
+          getAnalystTrack={getAnalystTrack}
+          logAction={logAction}
+        />
 
-        {editingField && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
-            >
-              <div className="p-8">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Editar Campo</h2>
-                <p className="text-slate-500 text-sm mb-6">Altere o rótulo e a descrição do campo.</p>
-                
-                <form key={editingField?.field.id || 'edit_field'} onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.currentTarget);
-                  const label = formData.get('label') as string;
-                  const description = formData.get('description') as string;
-                  
-                  if (editingField.type === 'analyst') {
-                    const updated = analystFields.map(f => f.id === editingField.field.id ? { ...f, label, description } : f);
-                    set(ref(db, 'config/analystFields'), updated);
-                  } else {
-                    const updated = systemFields.map(f => f.id === editingField.field.id ? { ...f, label, description } : f);
-                    set(ref(db, 'config/systemFields'), updated);
-                  }
-                  setEditingField(null);
-                }} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Rótulo (Label)</label>
-                    <input name="label" defaultValue={editingField.field.label} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
-                    <input name="description" defaultValue={editingField.field.description} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => setEditingField(null)} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <UserModal
+          isAddingUser={isAddingUser}
+          editingUser={editingUser}
+          onClose={() => {
+            setIsAddingUser(false);
+            setEditingUser(null);
+          }}
+          roles={roles}
+          handleAddUser={handleAddUser}
+          showToast={showToast}
+        />
 
-        {(isAddingTrack || editingTrack) && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
-            >
-              <div className="p-8">
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingTrack ? 'Editar Esteira' : 'Nova Esteira'}</h2>
-                <p className="text-slate-500 text-sm mb-6">{editingTrack ? 'Atualize o nome da esteira.' : 'Adicione uma nova esteira operacional.'}</p>
-                
-                <form key={editingTrack?.id || 'new_track'} onSubmit={(e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.currentTarget);
-                  const name = formData.get('name') as string;
-                  
-                  if (editingTrack) {
-                    const oldName = editingTrack.name;
-                    const newData = { name };
-                    update(ref(db, `tracks/${editingTrack.id}`), newData);
-                    if (user?.email) {
-                      logAction(
-                        user.email, 
-                        'EDIT_TRACK', 
-                        `Editou a esteira: ${oldName} para ${name}`, 
-                        'Configurações',
-                        editingTrack,
-                        { ...editingTrack, ...newData }
-                      );
-                    }
-                    // Update analysts track name
-                    analysts.forEach(a => {
-                      if (getAnalystTrack(a) === oldName) {
-                        // Find the actual key used for track
-                        const trackKey = Object.keys(a).find(k => 
-                          k.toLowerCase() === 'track' || 
-                          k.toLowerCase() === 'esteira' ||
-                          k.toLowerCase().includes('esteira')
-                        ) || 'track';
-                        update(ref(db, `analysts/${a.id}`), { [trackKey]: name });
-                      }
-                    });
-                    setEditingTrack(null);
-                  } else {
-                    const id = crypto.randomUUID();
-                    set(ref(db, `tracks/${id}`), { id, name });
-                    if (user?.email) {
-                      logAction(user.email, 'CREATE_TRACK', `Criou a esteira: ${name}`, 'Configurações');
-                    }
-                  }
-                  setIsAddingTrack(false);
-                }} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Nome da Esteira</label>
-                    <input name="name" defaultValue={editingTrack?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Vendas" />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <button type="button" onClick={() => { setIsAddingTrack(false); setEditingTrack(null); }} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                    <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
-                  </div>
-                </form>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <RoleModal
+          isAddingRole={isAddingRole}
+          editingRole={editingRole}
+          onClose={() => {
+            setIsAddingRole(false);
+            setEditingRole(null);
+          }}
+          handleAddRole={handleAddRole}
+        />
 
-        {/* User Modal */}
-        {(isAddingUser || editingUser) && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[70vh] overflow-y-auto"
-                >
-                    <div className="p-8">
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingUser ? 'Editar Usuário' : 'Novo Usuário'}</h2>
-                        <UserForm 
-                          user={editingUser} 
-                          roles={roles} 
-                          onSave={handleAddUser} 
-                          onCancel={() => { setIsAddingUser(false); setEditingUser(null); }} 
-                          showToast={showToast}
-                        />
-                    </div>
-                </motion.div>
-            </div>
-        )}
-
-        {/* Role Modal */}
-        {(isAddingRole || editingRole) && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[70vh] overflow-y-auto"
-                >
-                    <div className="p-8">
-                        <h2 className="text-2xl font-bold text-slate-800 mb-2">{editingRole ? 'Editar Perfil' : 'Novo Perfil'}</h2>
-                        <form key={editingRole?.id || 'new_role'} onSubmit={handleAddRole} className="space-y-6">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Nome do Perfil</label>
-                                <input name="name" defaultValue={editingRole?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
-                            </div>
-                            
-                            <div className="space-y-4">
-                                <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-2">Permissões</h3>
-                                {Object.entries(PERMISSIONS_LABELS).map(([key, label]) => (
-                                    <label key={key} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors">
-                                        <input 
-                                            type="checkbox" 
-                                            name="permissions" 
-                                            value={key} 
-                                            defaultChecked={editingRole?.permissions?.includes(key as Permission)}
-                                            className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300"
-                                        />
-                                        <span className="text-sm font-medium text-slate-700">{label}</span>
-                                    </label>
-                                ))}
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button type="button" onClick={() => { setIsAddingRole(false); setEditingRole(null); }} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
-                                <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
-                            </div>
-                        </form>
-                    </div>
-                </motion.div>
-            </div>
-        )}
-        {confirmModal.isOpen && (
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
-            >
-              <div className="p-6 text-center">
-                <div className={cn("w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4", confirmModal.requirePassword ? "bg-amber-50" : "bg-rose-50")}>
-                  {confirmModal.requirePassword ? <Key className="w-6 h-6 text-amber-500" /> : <AlertCircle className="w-6 h-6 text-rose-600" />}
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 mb-2">{confirmModal.title}</h3>
-                <p className="text-slate-500 text-sm mb-6">{confirmModal.message}</p>
-                
-                {confirmModal.requirePassword && (
-                  <div className="mb-6 text-left">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Sua Senha Atual</label>
-                    <input 
-                      type="password" 
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Digite sua senha para confirmar"
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      autoFocus
-                    />
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => {
-                      setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                      setConfirmPassword('');
-                    }}
-                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    onClick={() => { 
-                      confirmModal.onConfirm(confirmModal.requirePassword ? confirmPassword : undefined); 
-                      if (!confirmModal.requirePassword) {
-                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                      }
-                    }}
-                    className={cn("flex-1 px-4 py-2 text-white font-bold rounded-xl transition-all shadow-lg", confirmModal.confirmColor || "bg-rose-600")}
-                  >
-                    {confirmModal.confirmText || "Excluir"}
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmText={confirmModal.confirmText || 'Confirmar'}
+          confirmColor={confirmModal.confirmColor || 'bg-rose-600'}
+          onConfirm={(password) => {
+            confirmModal.onConfirm(password);
+            if (!confirmModal.requirePassword) {
+              setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            }
+          }}
+          onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+          requirePassword={confirmModal.requirePassword}
+        />
         <Toast 
           isVisible={toast.isVisible} 
           message={toast.message} 
