@@ -4,6 +4,7 @@ import { ClipboardCheck, X, ChevronRight } from 'lucide-react';
 import { AccessRequest, System, FieldDefinition } from '../../types';
 
 interface ApprovalsTabProps {
+  key?: string;
   requests: AccessRequest[];
   systems: System[];
   analystFields: FieldDefinition[];

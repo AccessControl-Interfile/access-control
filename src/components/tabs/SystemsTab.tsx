@@ -4,6 +4,7 @@ import { Monitor, Edit2, Trash2, AlertCircle, Plus } from 'lucide-react';
 import { System, Access, FieldDefinition } from '../../types';
 
 interface SystemsTabProps {
+  key?: string;
   systems: System[];
   accesses: Access[];
   searchQuery: string;

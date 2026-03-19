@@ -68,6 +68,7 @@ import { TrackModal } from './components/modals/TrackModal';
 import { UserModal } from './components/modals/UserModal';
 import { RoleModal } from './components/modals/RoleModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
+import { DeleteRequestModal } from './components/modals/DeleteRequestModal';
 import { cn } from './lib/utils';
 import { Analyst, System, Access, AccessStatus, Track, FieldDefinition, User, Role, Permission, PERMISSIONS_LABELS, AccessRequest } from './types';
 import Login from './components/Login';
@@ -375,6 +376,10 @@ export default function App() {
     confirmColor?: string;
     requirePassword?: boolean;
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, confirmText: 'Confirmar', confirmColor: 'bg-rose-600' });
+  const [deleteRequestModal, setDeleteRequestModal] = useState<{ isOpen: boolean, request: AccessRequest | null }>({
+    isOpen: false,
+    request: null
+  });
 
 
   // Auth State
@@ -871,6 +876,28 @@ export default function App() {
     } catch (error) {
       console.error("Error sending request:", error);
       showToast("Erro ao enviar solicitação. Tente novamente.", "error");
+    }
+  };
+
+  const handleDeleteRequest = (request: AccessRequest) => {
+    setDeleteRequestModal({
+      isOpen: true,
+      request
+    });
+  };
+
+  const confirmDeleteRequest = async (requestId: string) => {
+    try {
+      const request = requests.find(r => r.id === requestId);
+      await remove(ref(db, `requests/${requestId}`));
+      if (user?.email) {
+        await logAction(user.email, 'DELETE_REQUEST', `Excluiu a solicitação: ${request?.requestNumber || requestId}`, 'Solicitações');
+      }
+      setDeleteRequestModal({ isOpen: false, request: null });
+      showToast("Solicitação excluída com sucesso!", "success");
+    } catch (error) {
+      console.error("Error deleting request:", error);
+      showToast("Erro ao excluir solicitação. Tente novamente.", "error");
     }
   };
 
@@ -2292,6 +2319,7 @@ export default function App() {
                 setActiveTab={setActiveTab}
                 getAnalystInitials={getAnalystInitials}
                 getAnalystDisplayName={getAnalystDisplayName}
+                handleDeleteRequest={handleDeleteRequest}
               />
             )}
 
@@ -2629,6 +2657,13 @@ export default function App() {
           }}
           onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
           requirePassword={confirmModal.requirePassword}
+        />
+
+        <DeleteRequestModal 
+          isOpen={deleteRequestModal.isOpen}
+          request={deleteRequestModal.request}
+          onConfirm={confirmDeleteRequest}
+          onClose={() => setDeleteRequestModal({ isOpen: false, request: null })}
         />
         <Toast 
           isVisible={toast.isVisible} 

@@ -83,6 +83,7 @@ const DraggableFieldItem = ({
 };
 
 interface SettingsTabProps {
+  key?: string;
   hasPermission: (permission: Permission) => boolean;
   isReorderingAnalystFields: boolean;
   setIsReorderingAnalystFields: (value: boolean) => void;

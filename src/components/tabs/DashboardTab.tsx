@@ -6,6 +6,7 @@ import { cn } from '../../lib/utils';
 import { AccessRequest } from '../../types';
 
 interface DashboardTabProps {
+  key?: string;
   dashboardViewMode: 'byTrack' | 'bySystem';
   setDashboardViewMode: (mode: 'byTrack' | 'bySystem') => void;
   stats: any;

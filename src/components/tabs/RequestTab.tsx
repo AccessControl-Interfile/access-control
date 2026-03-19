@@ -1,11 +1,12 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, Check, Edit2, PlusCircle } from 'lucide-react';
+import { AlertCircle, Check, Edit2, PlusCircle, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { AccessRequest, FieldDefinition, System, Track } from '../../types';
 import { User as FirebaseUser } from 'firebase/auth';
 
 interface RequestTabProps {
+  key?: string;
   requestSubTab: 'new' | 'my';
   setRequestSubTab: (tab: 'new' | 'my') => void;
   editingRequest: AccessRequest | null;
@@ -21,6 +22,7 @@ interface RequestTabProps {
   setActiveTab: (tab: string) => void;
   getAnalystInitials: (analyst: any) => string;
   getAnalystDisplayName: (analyst: any) => string;
+  handleDeleteRequest: (request: AccessRequest) => void;
 }
 
 export default function RequestTab({
@@ -38,7 +40,8 @@ export default function RequestTab({
   handleRequestAccess,
   setActiveTab,
   getAnalystInitials,
-  getAnalystDisplayName
+  getAnalystDisplayName,
+  handleDeleteRequest
 }: RequestTabProps) {
   return (
     <motion.div 
@@ -251,22 +254,33 @@ export default function RequestTab({
                 )}
 
                 <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    {request.type === 'status_change' ? 'Mudança de Status' : `${request.systemIds?.length || 0} ${request.systemIds?.length === 1 ? 'Sistema' : 'Sistemas'}`}
-                  </span>
-                  {request.status === 'rejected' && request.type !== 'status_change' && (
-                    <button 
-                      onClick={() => {
-                        setEditingRequest(request);
-                        setSelectedSystemsInForm(request.systemIds || []);
-                        setRequestSubTab('new');
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 transition-colors"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                      Ajustar
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {request.type === 'status_change' ? 'Mudança de Status' : `${request.systemIds?.length || 0} ${request.systemIds?.length === 1 ? 'Sistema' : 'Sistemas'}`}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={() => handleDeleteRequest(request)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                        title="Excluir Solicitação"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      {request.status === 'rejected' && request.type !== 'status_change' && (
+                        <button 
+                          onClick={() => {
+                            setEditingRequest(request);
+                            setSelectedSystemsInForm(request.systemIds || []);
+                            setRequestSubTab('new');
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          Ajustar
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}

@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { Users, Monitor, ShieldCheck, ChevronRight, CheckCircle2, FileText, Check, Download, AlertCircle } from 'lucide-react';
 
 interface ExtractTabProps {
+  key?: string;
   handleExportData: (type: 'analysts' | 'systems' | 'users' | 'tracks' | 'accesses' | 'logs') => void;
   hasPermission: (permission: string) => boolean;
   logExportAllTime: boolean;

@@ -14,6 +14,7 @@ const STATUS_CONFIG: Record<AccessStatus, { color: string; icon: React.ReactNode
 };
 
 interface AnalystsTabProps {
+  key?: string;
   selectedAnalyst: Analyst | null;
   setSelectedAnalyst: (analyst: Analyst | null) => void;
   paginatedAnalysts: Analyst[];
