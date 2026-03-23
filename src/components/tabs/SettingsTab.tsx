@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
-import { Users, Monitor, ShieldCheck, Search, Plus, Check, Move, Edit2, Trash2, Key, GripVertical } from 'lucide-react';
+import { Users, Monitor, ShieldCheck, Search, Plus, Check, Move, Edit2, Trash2, Key, GripVertical, UserCheck } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { FieldDefinition, Track, User, Role, PERMISSIONS_LABELS, Permission } from '../../types';
+import { FieldDefinition, Track, User, Role, PERMISSIONS_LABELS, Permission, Supervisor } from '../../types';
 import { ref, set } from 'firebase/database';
 import { db } from '../../lib/firebase';
 
@@ -99,9 +99,13 @@ interface SettingsTabProps {
   setTempSystemFields: (fields: FieldDefinition[]) => void;
   systemFields: FieldDefinition[];
   tracks: Track[];
+  supervisors: Supervisor[];
   setIsAddingTrack: (value: boolean) => void;
   setEditingTrack: (track: Track) => void;
   deleteTrack: (track: Track) => void;
+  setIsAddingSupervisor: (value: boolean) => void;
+  setEditingSupervisor: (supervisor: Supervisor) => void;
+  deleteSupervisor: (supervisor: Supervisor) => void;
   users: User[];
   userSearchQuery: string;
   setUserSearchQuery: (query: string) => void;
@@ -133,9 +137,13 @@ export default function SettingsTab({
   setTempSystemFields,
   systemFields,
   tracks,
+  supervisors,
   setIsAddingTrack,
   setEditingTrack,
   deleteTrack,
+  setIsAddingSupervisor,
+  setEditingSupervisor,
+  deleteSupervisor,
   users,
   userSearchQuery,
   setUserSearchQuery,
@@ -360,6 +368,67 @@ export default function SettingsTab({
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasPermission('settings_supervisors') && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+            <div>
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-indigo-600" />
+                Gestão de Supervisores
+              </h3>
+              <p className="text-sm text-slate-500">Gerencie os supervisores disponíveis para seleção.</p>
+            </div>
+            <button 
+              onClick={() => setIsAddingSupervisor(true)}
+              className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {supervisors.map(supervisor => (
+                <div key={supervisor.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-bold text-slate-700 truncate">{supervisor.name}</span>
+                    {supervisor.isUser && (
+                      <span className="text-[9px] font-bold text-indigo-500 uppercase tracking-tighter">Usuário</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!supervisor.isUser ? (
+                      <>
+                        <button 
+                          onClick={() => setEditingSupervisor(supervisor)}
+                          className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                          title="Editar Supervisor"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => deleteSupervisor(supervisor)}
+                          className="p-2 bg-white border border-slate-200 text-rose-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                          title="Excluir Supervisor"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <div className="p-2 text-slate-300" title="Supervisores vinculados a usuários devem ser editados na Gestão de Usuários">
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {supervisors.length === 0 && (
+                <p className="col-span-full text-center text-slate-400 py-4">Nenhum supervisor cadastrado.</p>
+              )}
             </div>
           </div>
         </div>

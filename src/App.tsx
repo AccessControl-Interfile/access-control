@@ -65,12 +65,13 @@ import { AnalystModal } from './components/modals/AnalystModal';
 import { SystemModal } from './components/modals/SystemModal';
 import { FieldModal } from './components/modals/FieldModal';
 import { TrackModal } from './components/modals/TrackModal';
+import { SupervisorModal } from './components/modals/SupervisorModal';
 import { UserModal } from './components/modals/UserModal';
 import { RoleModal } from './components/modals/RoleModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { DeleteRequestModal } from './components/modals/DeleteRequestModal';
 import { cn } from './lib/utils';
-import { Analyst, System, Access, AccessStatus, Track, FieldDefinition, User, Role, Permission, PERMISSIONS_LABELS, AccessRequest } from './types';
+import { Analyst, System, Access, AccessStatus, Track, Supervisor, FieldDefinition, User, Role, Permission, PERMISSIONS_LABELS, AccessRequest } from './types';
 import Login from './components/Login';
 import ChangePassword from './components/ChangePassword';
 import Footer from './components/Footer';
@@ -81,6 +82,7 @@ const INITIAL_ANALYST_FIELDS: FieldDefinition[] = [
   { id: 'name', label: 'Nome', description: 'Identificação completa do colaborador.' },
   { id: 'email', label: 'E-mail', description: 'E-mail corporativo para contato.' },
   { id: 'track', label: 'Esteira', description: 'Vinculação operacional do analista.' },
+  { id: 'supervisor', label: 'Supervisor', description: 'Supervisor responsável pelo analista.' },
 ];
 
 const INITIAL_SYSTEM_FIELDS: FieldDefinition[] = [
@@ -250,6 +252,7 @@ export default function App() {
   const [allAnalysts, setAllAnalysts] = useState<Analyst[]>([]);
   const [systems, setSystems] = useState<System[]>([]);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [analystFields, setAnalystFields] = useState<FieldDefinition[]>(INITIAL_ANALYST_FIELDS);
   const [systemFields, setSystemFields] = useState<FieldDefinition[]>(INITIAL_SYSTEM_FIELDS);
   const [accesses, setAccesses] = useState<Access[]>([]);
@@ -332,10 +335,12 @@ export default function App() {
   const [editingSystem, setEditingSystem] = useState<System | null>(null);
   const [editingField, setEditingField] = useState<{ type: 'analyst' | 'system', field: FieldDefinition } | null>(null);
   const [editingTrack, setEditingTrack] = useState<Track | null>(null);
+  const [editingSupervisor, setEditingSupervisor] = useState<Supervisor | null>(null);
   const [isAddingAnalyst, setIsAddingAnalyst] = useState(false);
   const [selectedSystemsInForm, setSelectedSystemsInForm] = useState<string[]>([]);
   const [isAddingSystem, setIsAddingSystem] = useState(false);
   const [isAddingTrack, setIsAddingTrack] = useState(false);
+  const [isAddingSupervisor, setIsAddingSupervisor] = useState(false);
   const [isAddingField, setIsAddingField] = useState<{ type: 'analyst' | 'system' } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -404,6 +409,7 @@ export default function App() {
       analysts: ref(db, 'analysts'),
       systems: ref(db, 'systems'),
       tracks: ref(db, 'tracks'),
+      supervisors: ref(db, 'supervisors'),
       accesses: ref(db, 'accesses'),
       analystFields: ref(db, 'config/analystFields'),
       systemFields: ref(db, 'config/systemFields'),
@@ -537,6 +543,15 @@ export default function App() {
           setTracks([]);
         }
       }),
+      onValue(refs.supervisors, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+          setSupervisors(list);
+        } else {
+          setSupervisors([]);
+        }
+      }),
       onValue(refs.accesses, (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -550,7 +565,12 @@ export default function App() {
         const data = snapshot.val();
         if (data) {
           const arr = Array.isArray(data) ? data : Object.values(data);
-          const validItems = arr.filter(item => item && typeof item === 'object' && 'id' in item) as FieldDefinition[];
+          const validItems = (arr.filter(item => item && typeof item === 'object' && 'id' in item) as any[]).map(item => {
+            if (item.options && !Array.isArray(item.options)) {
+              return { ...item, options: Object.values(item.options) };
+            }
+            return item;
+          }) as FieldDefinition[];
           // Remove duplicates by id
           const uniqueItems = Array.from(new Map(validItems.map(item => [item.id, item])).values());
           setAnalystFields(uniqueItems);
@@ -719,6 +739,26 @@ export default function App() {
 
     return { totalAccesses, okCount, pendingCount, lostCount, byTrack, bySystem };
   }, [accesses, allAnalysts, systems, tracks]);
+
+  const mergedSupervisors = useMemo(() => {
+    const userSupervisors = users
+      .filter(u => {
+        const role = roles.find(r => r.id === u.roleId);
+        return role?.name.toLowerCase() === 'supervisor';
+      })
+      .map(u => ({ id: u.id, name: u.name, isUser: true }));
+    
+    const manualSupervisors = supervisors.map(s => ({ ...s, isUser: false }));
+    
+    const combined = [...manualSupervisors];
+    userSupervisors.forEach(us => {
+      if (!combined.find(s => s.name.toLowerCase() === us.name.toLowerCase())) {
+        combined.push(us);
+      }
+    });
+    
+    return combined.sort((a, b) => a.name.localeCompare(b.name));
+  }, [users, supervisors, roles]);
 
   const handleUpdateAccess = (analystId: string, systemId: string, status: AccessStatus) => {
     if (!canManageAccess) return;
@@ -1162,7 +1202,33 @@ export default function App() {
     });
   };
 
-
+  const deleteSupervisor = (supervisor: Supervisor) => {
+    if (!hasPermission('settings_supervisors')) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Excluir Supervisor',
+      message: `Tem certeza que deseja excluir o supervisor "${supervisor.name}"?`,
+      confirmText: 'Excluir',
+      confirmColor: 'bg-rose-600',
+      onConfirm: async () => {
+        try {
+          await remove(ref(db, `supervisors/${supervisor.id}`));
+          if (user?.email) {
+            await logAction(user.email, 'DELETE_SUPERVISOR', `Excluiu o supervisor: ${supervisor.name}`, 'Configurações');
+          }
+          const analystsToUpdate = allAnalysts.filter(a => a.supervisor === supervisor.name);
+          for (const analyst of analystsToUpdate) {
+            await update(ref(db, `analysts/${analyst.id}`), { supervisor: '' });
+          }
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          showToast("Supervisor excluído com sucesso!", "success");
+        } catch (error) {
+          console.error("Error deleting supervisor:", error);
+          showToast("Erro ao excluir supervisor. Tente novamente.", "error");
+        }
+      }
+    });
+  };
 
   const handleAddUser = async (userData: { name: string, email: string, roleId: string, permissions: Permission[] }) => {
     if (!hasPermission('settings_users')) {
@@ -1786,7 +1852,7 @@ export default function App() {
             // Add any other keys found in analyst data
             Object.values(allAnalysts).forEach((analyst: any) => {
               Object.keys(analyst).forEach(key => {
-                if (!['id', 'name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key) && !key.toLowerCase().includes('esteira')) {
+                if (!['id', 'name', 'email', 'track', 'supervisor', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key) && !key.toLowerCase().includes('esteira')) {
                   const field = analystFields.find(f => f.id === key);
                   headersSet.add(field?.label || key);
                 }
@@ -1807,6 +1873,7 @@ export default function App() {
                 else if (header === 'Nome') row[header] = getAnalystDisplayName(analyst);
                 else if (header === 'Email') row[header] = getAnalystEmail(analyst);
                 else if (header === 'Esteira') row[header] = getAnalystTrack(analyst);
+                else if (header === 'Supervisor') row[header] = analyst.supervisor || '';
                 else if (header === 'Data de Criação') row[header] = analyst.createdAt || '';
                 else if (header === 'Data de Desligamento') row[header] = analyst.deactivatedAt || '';
                 else if (header === 'Aprovado Por') row[header] = analyst.approvedByName || '';
@@ -2317,6 +2384,7 @@ export default function App() {
                 tracks={tracks}
                 systems={systems}
                 requests={requests}
+                supervisors={mergedSupervisors}
                 user={user}
                 handleRequestAccess={handleRequestAccess}
                 setActiveTab={setActiveTab}
@@ -2375,9 +2443,13 @@ export default function App() {
                 setTempSystemFields={setTempSystemFields}
                 systemFields={systemFields}
                 tracks={tracks}
+                supervisors={mergedSupervisors}
                 setIsAddingTrack={setIsAddingTrack}
                 setEditingTrack={setEditingTrack}
                 deleteTrack={deleteTrack}
+                setIsAddingSupervisor={setIsAddingSupervisor}
+                setEditingSupervisor={setEditingSupervisor}
+                deleteSupervisor={deleteSupervisor}
                 users={users}
                 userSearchQuery={userSearchQuery}
                 setUserSearchQuery={setUserSearchQuery}
@@ -2572,6 +2644,7 @@ export default function App() {
           }}
           analystFields={analystFields}
           tracks={tracks}
+          supervisors={mergedSupervisors}
           systems={systems}
           accesses={accesses}
           canManageAnalysts={canManageAnalysts}
@@ -2621,6 +2694,18 @@ export default function App() {
           user={user}
           analysts={analysts}
           getAnalystTrack={getAnalystTrack}
+          logAction={logAction}
+        />
+
+        <SupervisorModal
+          isAddingSupervisor={isAddingSupervisor}
+          editingSupervisor={editingSupervisor}
+          onClose={() => {
+            setIsAddingSupervisor(false);
+            setEditingSupervisor(null);
+          }}
+          user={user}
+          analysts={allAnalysts}
           logAction={logAction}
         />
 

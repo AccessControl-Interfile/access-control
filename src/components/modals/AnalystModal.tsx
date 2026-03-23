@@ -4,7 +4,7 @@ import { X, Search, Check } from 'lucide-react';
 import { ref, set, update, remove } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { cn } from '../../lib/utils';
-import { Analyst, FieldDefinition, Track, System, Access, User } from '../../types';
+import { Analyst, FieldDefinition, Track, System, Access, User, Supervisor } from '../../types';
 
 interface AnalystModalProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface AnalystModalProps {
   onClose: () => void;
   analystFields: FieldDefinition[];
   tracks: Track[];
+  supervisors: Supervisor[];
   systems: System[];
   accesses: Access[];
   canManageAnalysts: boolean;
@@ -29,6 +30,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
   onClose,
   analystFields,
   tracks,
+  supervisors,
   systems,
   accesses,
   canManageAnalysts,
@@ -155,46 +157,56 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
               <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Dados do Analista</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {analystFields.map(field => {
-                  if (field.id === 'name') {
-                    return (
-                      <div key={field.id}>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                          {field.label}
-                        </label>
-                        <input name="name" defaultValue={editingAnalyst?.name} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="Ex: João Silva" />
-                      </div>
+                  let fieldContent = null;
+
+                  if (field.options && field.options.length > 0) {
+                    fieldContent = (
+                      <select 
+                        name={field.id} 
+                        defaultValue={editingAnalyst?.[field.id] || ''} 
+                        required 
+                        disabled={!canManageAnalysts} 
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60"
+                      >
+                        <option value="">Selecione uma opção...</option>
+                        {field.options.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
                     );
-                  }
-                  if (field.id === 'email') {
-                    return (
-                      <div key={field.id}>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                          {field.label}
-                        </label>
-                        <input name="email" type="email" defaultValue={editingAnalyst?.email} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="joao.silva@empresa.com" />
-                      </div>
+                  } else if (field.id === 'name') {
+                    fieldContent = (
+                      <input name="name" defaultValue={editingAnalyst?.name} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="Ex: João Silva" />
                     );
-                  }
-                  if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
-                    return (
-                      <div key={field.id}>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                          {field.label}
-                        </label>
-                        <select name={field.id} defaultValue={getAnalystTrack(editingAnalyst || {} as Analyst)} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
-                          {tracks.slice().sort((a, b) => a.name.localeCompare(b.name)).map(track => (
-                            <option key={track.id} value={track.name}>{track.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                  } else if (field.id === 'email') {
+                    fieldContent = (
+                      <input name="email" type="email" defaultValue={editingAnalyst?.email} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="joao.silva@empresa.com" />
                     );
-                  }
-                  // Fallback for custom fields
-                  return (
-                    <div key={field.id}>
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
-                        {field.label}
-                      </label>
+                  } else if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
+                    fieldContent = (
+                      <select name={field.id} defaultValue={getAnalystTrack(editingAnalyst || {} as Analyst)} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
+                        {tracks.slice().sort((a, b) => a.name.localeCompare(b.name)).map(track => (
+                          <option key={track.id} value={track.name}>{track.name}</option>
+                        ))}
+                      </select>
+                    );
+                  } else if (field.id === 'supervisor' || field.id.toLowerCase().includes('supervisor') || field.label.toLowerCase().includes('supervisor')) {
+                    fieldContent = (
+                      <select 
+                        name={field.id} 
+                        defaultValue={editingAnalyst?.[field.id] || ''} 
+                        required 
+                        disabled={!canManageAnalysts} 
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60"
+                      >
+                        <option value="">Selecione um supervisor...</option>
+                        {supervisors.slice().sort((a, b) => a.name.localeCompare(b.name)).map(supervisor => (
+                          <option key={supervisor.id} value={supervisor.name}>{supervisor.name}</option>
+                        ))}
+                      </select>
+                    );
+                  } else {
+                    fieldContent = (
                       <input 
                         name={field.id} 
                         defaultValue={editingAnalyst?.[field.id] || ''} 
@@ -204,6 +216,15 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder={field.description}
                       />
+                    );
+                  }
+
+                  return (
+                    <div key={field.id}>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                        {field.label}
+                      </label>
+                      {fieldContent}
                     </div>
                   );
                 })}

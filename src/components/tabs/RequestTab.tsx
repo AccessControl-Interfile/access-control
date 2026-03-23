@@ -17,6 +17,7 @@ interface RequestTabProps {
   tracks: Track[];
   systems: System[];
   requests: AccessRequest[];
+  supervisors: any[];
   user: FirebaseUser | null;
   handleRequestAccess: (e: React.FormEvent<HTMLFormElement>) => void;
   setActiveTab: (tab: string) => void;
@@ -36,6 +37,7 @@ export default function RequestTab({
   tracks,
   systems,
   requests,
+  supervisors,
   user,
   handleRequestAccess,
   setActiveTab,
@@ -100,6 +102,26 @@ export default function RequestTab({
               {analystFields.map(field => {
                 const defaultValue = editingRequest?.analystData[field.id] || '';
                 
+                if (field.options && field.options.length > 0) {
+                  return (
+                    <div key={field.id}>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                        {field.label}
+                      </label>
+                      <select 
+                        name={field.id} 
+                        required 
+                        defaultValue={defaultValue} 
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      >
+                        <option value="">Selecione uma opção...</option>
+                        {field.options.map(option => (
+                          <option key={option} value={option}>{option}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
                 if (field.id === 'name') {
                   return (
                     <div key={field.id}>
@@ -130,6 +152,26 @@ export default function RequestTab({
                         <option value="">Selecione uma esteira</option>
                         {tracks.map(track => (
                           <option key={track.id} value={track.name}>{track.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+                if (field.id === 'supervisor' || field.id.toLowerCase().includes('supervisor') || field.label.toLowerCase().includes('supervisor')) {
+                  return (
+                    <div key={field.id}>
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                        {field.label}
+                      </label>
+                      <select 
+                        name={field.id} 
+                        required 
+                        defaultValue={defaultValue} 
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      >
+                        <option value="">Selecione um supervisor...</option>
+                        {supervisors.slice().sort((a, b) => a.name.localeCompare(b.name)).map(supervisor => (
+                          <option key={supervisor.id} value={supervisor.name}>{supervisor.name}</option>
                         ))}
                       </select>
                     </div>

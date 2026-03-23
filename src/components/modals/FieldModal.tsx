@@ -1,8 +1,14 @@
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence, Reorder } from 'framer-motion';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { ref, set } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { FieldDefinition, Permission, User } from '../../types';
+
+interface OptionItem {
+  id: string;
+  value: string;
+}
 
 interface FieldModalProps {
   isAddingField: { type: 'analyst' | 'system' } | null;
@@ -27,7 +33,40 @@ export const FieldModal: React.FC<FieldModalProps> = ({
   logAction,
   showToast,
 }) => {
+  const [hasOptions, setHasOptions] = useState(false);
+  const [options, setOptions] = useState<OptionItem[]>([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
+
+  useEffect(() => {
+    if (editingField) {
+      setHasOptions(!!editingField.field.options);
+      if (editingField.field.options) {
+        setOptions(editingField.field.options.map(opt => ({ id: Math.random().toString(36).substr(2, 9), value: opt })));
+      } else {
+        setOptions([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
+      }
+    } else {
+      setHasOptions(false);
+      setOptions([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
+    }
+  }, [editingField, isAddingField]);
+
   if (!isAddingField && !editingField) return null;
+
+  const handleAddOption = () => {
+    setOptions([...options, { id: Math.random().toString(36).substr(2, 9), value: '' }]);
+  };
+
+  const handleRemoveOption = (id: string) => {
+    if (options.length > 1) {
+      setOptions(options.filter(opt => opt.id !== id));
+    } else {
+      setOptions([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
+    }
+  };
+
+  const handleUpdateOption = (id: string, value: string) => {
+    setOptions(options.map(opt => opt.id === id ? { ...opt, value } : opt));
+  };
 
   const handleAddField = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,6 +78,15 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     const id = formData.get('id') as string;
     const label = formData.get('label') as string;
     const description = formData.get('description') as string;
+    
+    let fieldOptions: string[] | undefined = undefined;
+    if (hasOptions) {
+      fieldOptions = options.map(o => o.value.trim()).filter(o => o !== '');
+      if (fieldOptions.length === 0) {
+        showToast("Adicione pelo menos uma opção.", "error");
+        return;
+      }
+    }
 
     const reservedAnalystIds = ['id', 'name', 'email', 'track', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'];
     const reservedSystemIds = ['id', 'name', 'description'];
@@ -62,13 +110,13 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     }
 
     if (isAddingField?.type === 'analyst') {
-      const newFields = [...analystFields, { id, label, description }];
+      const newFields = [...analystFields, { id, label, description, options: fieldOptions }];
       set(ref(db, 'config/analystFields'), newFields);
       if (user?.email) {
         logAction(user.email, 'ADD_ANALYST_FIELD', `Adicionou campo de analista: ${label}`, 'Configurações');
       }
     } else if (isAddingField?.type === 'system') {
-      const newFields = [...systemFields, { id, label, description }];
+      const newFields = [...systemFields, { id, label, description, options: fieldOptions }];
       set(ref(db, 'config/systemFields'), newFields);
       if (user?.email) {
         logAction(user.email, 'ADD_SYSTEM_FIELD', `Adicionou campo de sistema: ${label}`, 'Configurações');
@@ -84,12 +132,21 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     const formData = new FormData(e.currentTarget);
     const label = formData.get('label') as string;
     const description = formData.get('description') as string;
+
+    let fieldOptions: string[] | undefined = undefined;
+    if (hasOptions) {
+      fieldOptions = options.map(o => o.value.trim()).filter(o => o !== '');
+      if (fieldOptions.length === 0) {
+        showToast("Adicione pelo menos uma opção.", "error");
+        return;
+      }
+    }
     
     if (editingField.type === 'analyst') {
-      const updated = analystFields.map(f => f.id === editingField.field.id ? { ...f, label, description } : f);
+      const updated = analystFields.map(f => f.id === editingField.field.id ? { ...f, label, description, options: fieldOptions } : f);
       set(ref(db, 'config/analystFields'), updated);
     } else {
-      const updated = systemFields.map(f => f.id === editingField.field.id ? { ...f, label, description } : f);
+      const updated = systemFields.map(f => f.id === editingField.field.id ? { ...f, label, description, options: fieldOptions } : f);
       set(ref(db, 'config/systemFields'), updated);
     }
     onClose();
@@ -122,6 +179,63 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
                 <input name="description" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Data de nascimento do colaborador" />
               </div>
+              <div className="flex items-center gap-2 py-2">
+                <input 
+                  type="checkbox" 
+                  id="hasOptionsAdd" 
+                  checked={hasOptions} 
+                  onChange={(e) => setHasOptions(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                />
+                <label htmlFor="hasOptionsAdd" className="text-sm font-bold text-slate-600 cursor-pointer">Opções (Dropdown)</label>
+              </div>
+              {hasOptions && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Lista de Opções</label>
+                  <div className="space-y-2">
+                    <Reorder.Group axis="y" values={options} onReorder={setOptions} className="space-y-2">
+                      <AnimatePresence mode="popLayout">
+                        {options.map((option, index) => (
+                          <Reorder.Item 
+                            key={option.id}
+                            value={option}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            className="flex gap-2 items-center"
+                          >
+                            <div className="cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-slate-400 transition-colors">
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                            <input 
+                              value={option.value}
+                              onChange={(e) => handleUpdateOption(option.id, e.target.value)}
+                              required
+                              className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm" 
+                              placeholder={`Opção ${index + 1}`} 
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => handleRemoveOption(option.id)}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </Reorder.Item>
+                        ))}
+                      </AnimatePresence>
+                    </Reorder.Group>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleAddOption}
+                    className="flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors py-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Adicionar Opção
+                  </button>
+                </motion.div>
+              )}
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={onClose} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
                 <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>
@@ -155,6 +269,63 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
                 <input name="description" defaultValue={editingField.field.description} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
               </div>
+              <div className="flex items-center gap-2 py-2">
+                <input 
+                  type="checkbox" 
+                  id="hasOptionsEdit" 
+                  checked={hasOptions} 
+                  onChange={(e) => setHasOptions(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                />
+                <label htmlFor="hasOptionsEdit" className="text-sm font-bold text-slate-600 cursor-pointer">Opções (Dropdown)</label>
+              </div>
+              {hasOptions && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Lista de Opções</label>
+                  <div className="space-y-2">
+                    <Reorder.Group axis="y" values={options} onReorder={setOptions} className="space-y-2">
+                      <AnimatePresence mode="popLayout">
+                        {options.map((option, index) => (
+                          <Reorder.Item 
+                            key={option.id}
+                            value={option}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: 10 }}
+                            className="flex gap-2 items-center"
+                          >
+                            <div className="cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-slate-400 transition-colors">
+                              <GripVertical className="w-4 h-4" />
+                            </div>
+                            <input 
+                              value={option.value}
+                              onChange={(e) => handleUpdateOption(option.id, e.target.value)}
+                              required
+                              className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm" 
+                              placeholder={`Opção ${index + 1}`} 
+                            />
+                            <button 
+                              type="button"
+                              onClick={() => handleRemoveOption(option.id)}
+                              className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </Reorder.Item>
+                        ))}
+                      </AnimatePresence>
+                    </Reorder.Group>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleAddOption}
+                    className="flex items-center gap-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 transition-colors py-1"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Adicionar Opção
+                  </button>
+                </motion.div>
+              )}
               <div className="flex gap-3 pt-4">
                 <button type="button" onClick={onClose} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>
                 <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200">Salvar</button>

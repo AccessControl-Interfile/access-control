@@ -4,6 +4,7 @@ export type Permission =
   | 'settings_analyst_fields'
   | 'settings_system_fields'
   | 'settings_tracks'
+  | 'settings_supervisors'
   | 'settings_users'
   | 'settings_roles'
   | 'systems_manage'
@@ -18,6 +19,7 @@ export const PERMISSIONS_LABELS: Record<Permission, string> = {
   'settings_analyst_fields': 'Configurações: Campos de Analista',
   'settings_system_fields': 'Configurações: Campos de Sistema',
   'settings_tracks': 'Configurações: Gestão de Esteiras',
+  'settings_supervisors': 'Configurações: Gestão de Supervisores',
   'settings_users': 'Configurações: Gestão de Usuários',
   'settings_roles': 'Configurações: Gestão de Perfis',
   'systems_manage': 'Sistemas: Gerenciar Sistemas',
@@ -57,11 +59,18 @@ export interface Track {
   name: string;
 }
 
+export interface Supervisor {
+  id: string;
+  name: string;
+  isUser?: boolean;
+}
+
 export interface FieldDefinition {
   id: string;
   label: string;
   description: string;
   order?: number;
+  options?: string[];
 }
 
 export interface Analyst {
