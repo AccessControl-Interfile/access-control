@@ -762,7 +762,7 @@ export default function App() {
           logAction(
             user.email, 
             'CREATE_REQUEST', 
-            `Solicitou mudança de status do sistema ${system?.name || systemId} para o analista ${analyst?.name || analystId}: ${status}`, 
+            `Solicitou mudança de status do sistema ${system?.name || systemId} para o analista ${getAnalystDisplayName(analyst)}: ${status}`, 
             'Solicitações',
             null,
             requestData
@@ -786,7 +786,7 @@ export default function App() {
         logAction(
           user.email, 
           'UPDATE_ACCESS_STATUS', 
-          `Alterou status do sistema ${system?.name || systemId} para o analista ${analyst?.name || analystId}: ${status}`, 
+          `Alterou status do sistema ${system?.name || systemId} para o analista ${getAnalystDisplayName(analyst)}: ${status}`, 
           'Analistas',
           oldAccess || { status: 'N/A' },
           newData
@@ -933,7 +933,7 @@ export default function App() {
         await logAction(
           user.email, 
           'APPROVE_REQUEST', 
-          `Aprovou mudança de status do sistema ${system?.name || systemId} para o analista ${analyst?.name || analystId}: ${newStatus}`, 
+          `Aprovou mudança de status do sistema ${system?.name || systemId} para o analista ${getAnalystDisplayName(analyst)}: ${newStatus}`, 
           'Solicitações',
           request,
           newData
@@ -1848,15 +1848,19 @@ export default function App() {
                 const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
                 return timeB - timeA;
               })
-              .map((l: any) => ({
-                Data: l.timestamp ? new Date(l.timestamp).toLocaleString('pt-BR') : '',
-                Usuário: l.userEmail,
-                Ação: l.action,
-                Módulo: l.module,
-                Detalhes: l.details,
-                'Dados Antigos': l.oldData || '',
-                'Dados Novos': l.newData || ''
-              }));
+              .map((l: any) => {
+                const logUser = users.find(u => u.email === l.userEmail);
+                return {
+                  Data: l.timestamp ? new Date(l.timestamp).toLocaleString('pt-BR') : '',
+                  Usuário: logUser?.name || l.userEmail,
+                  Email: l.userEmail,
+                  Ação: l.action,
+                  Módulo: l.module,
+                  Detalhes: l.details,
+                  'Dados Antigos': l.oldData || '',
+                  'Dados Novos': l.newData || ''
+                };
+              });
           }
           filename = `base_logs_auditoria${!logExportAllTime ? `_${logExportStartDate || 'inicio'}_a_${logExportEndDate || 'fim'}` : ''}`;
           break;
