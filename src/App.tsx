@@ -367,6 +367,7 @@ export default function App() {
 
   const [analystStatusFilter, setAnalystStatusFilter] = useState<'all' | 'active' | 'deactivated'>('active');
   const [analystAccessStatusFilter, setAnalystAccessStatusFilter] = useState<'all' | 'ok' | 'pending' | 'lost' | 'none'>('all');
+  const [analystSupervisorFilter, setAnalystSupervisorFilter] = useState<string>('all');
   const [logExportStartDate, setLogExportStartDate] = useState('');
   const [logExportEndDate, setLogExportEndDate] = useState('');
   const [logExportAllTime, setLogExportAllTime] = useState(true);
@@ -614,6 +615,10 @@ export default function App() {
                            (analystStatusFilter === 'active' && !a.deactivatedAt) ||
                            (analystStatusFilter === 'deactivated' && !!a.deactivatedAt);
                            
+      const matchesSupervisor = analystSupervisorFilter === 'all' || 
+                                a.supervisor === analystSupervisorFilter ||
+                                analystFields.some(f => (f.id === 'supervisor' || f.id.toLowerCase().includes('supervisor') || f.label.toLowerCase().includes('supervisor')) && a[f.id] === analystSupervisorFilter);
+
       let matchesAccessStatus = true;
       if (analystAccessStatusFilter !== 'all') {
         const analystAccesses = accesses.filter(acc => acc.analystId === a.id);
@@ -628,7 +633,7 @@ export default function App() {
         }
       }
       
-      return matchesSearch && matchesStatus && matchesAccessStatus;
+      return matchesSearch && matchesStatus && matchesAccessStatus && matchesSupervisor;
     });
     
     // Sort by name
@@ -639,7 +644,7 @@ export default function App() {
     });
     
     return filtered;
-  }, [allAnalysts, searchQuery, analystStatusFilter, analystAccessStatusFilter, analystFields, accesses]);
+  }, [allAnalysts, searchQuery, analystStatusFilter, analystAccessStatusFilter, analystSupervisorFilter, analystFields, accesses]);
 
   const paginatedAnalysts = useMemo(() => {
     return filteredAnalysts.slice(0, analystsLimit);
@@ -2228,6 +2233,16 @@ export default function App() {
                   <option value="pending">Com Pendências</option>
                   <option value="lost">Acesso Perdido</option>
                   <option value="none">Sem Acessos</option>
+                </select>
+                <select 
+                  value={analystSupervisorFilter}
+                  onChange={(e) => setAnalystSupervisorFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer hidden md:block"
+                >
+                  <option value="all">Qualquer supervisor</option>
+                  {mergedSupervisors.slice().sort((a, b) => a.name.localeCompare(b.name)).map(s => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
                 </select>
                 <select 
                   value={analystStatusFilter}
