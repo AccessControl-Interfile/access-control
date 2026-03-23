@@ -729,7 +729,7 @@ export default function App() {
     const finalNeedsApproval = currentUserData?.roleId === 'treinador';
 
     const oldAccess = accesses.find(a => a.analystId === analystId && a.systemId === systemId);
-    const analyst = analysts.find(a => a.id === analystId);
+    const analyst = allAnalysts.find(a => a.id === analystId);
     const system = systems.find(s => s.id === systemId);
 
     if (finalNeedsApproval) {
@@ -908,7 +908,7 @@ export default function App() {
 
     if (request.type === 'status_change' && request.statusChangeData) {
       const { analystId, systemId, newStatus } = request.statusChangeData;
-      const analyst = analysts.find(a => a.id === analystId);
+      const analyst = allAnalysts.find(a => a.id === analystId);
       const system = systems.find(s => s.id === systemId);
       
       const accessRef = ref(db, `accesses/${analystId}_${systemId}`);
@@ -1043,9 +1043,8 @@ export default function App() {
 
   const deactivateAnalyst = (id: string) => {
     if (!canManageAnalysts) return;
-    const analyst = analysts.find(a => a.id === id);
-    if (!analyst) return;
-    if (analyst.deactivatedAt) return;
+    const analyst = allAnalysts.find(a => a.id === id);
+    if (!analyst || analyst.deactivatedAt) return;
 
     setConfirmModal({
       isOpen: true,
@@ -1074,7 +1073,7 @@ export default function App() {
 
   const deleteAnalyst = (id: string) => {
     if (!canManageAnalysts) return;
-    const analyst = analysts.find(a => a.id === id);
+    const analyst = allAnalysts.find(a => a.id === id);
     if (analyst?.deactivatedAt) {
       showToast("Analistas desligados não podem ser excluídos.", "error");
       return;
@@ -1149,7 +1148,7 @@ export default function App() {
           if (user?.email) {
             await logAction(user.email, 'DELETE_TRACK', `Excluiu a esteira: ${track.name}`, 'Configurações');
           }
-          const analystsToUpdate = analysts.filter(a => getAnalystTrack(a) === track.name);
+          const analystsToUpdate = allAnalysts.filter(a => getAnalystTrack(a) === track.name);
           for (const analyst of analystsToUpdate) {
             await update(ref(db, `analysts/${analyst.id}`), { track: '' });
           }
@@ -1502,7 +1501,7 @@ export default function App() {
         
         validRows++;
         const email = emailVal.toLowerCase();
-        let analystId = analysts.find(a => {
+        let analystId = allAnalysts.find(a => {
            const aEmail = a[emailKey] || a.email || a.email_interfile;
            return aEmail && typeof aEmail === 'string' && aEmail.toLowerCase() === email;
         })?.id;
@@ -1525,7 +1524,7 @@ export default function App() {
             };
           }
         } else {
-           const existingAnalyst = analysts.find(a => a.id === analystId);
+           const existingAnalyst = allAnalysts.find(a => a.id === analystId);
            updates[`analysts/${analystId}`] = { ...existingAnalyst, ...analystData };
         }
         

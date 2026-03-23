@@ -143,15 +143,13 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           </button>
                           {canManageAnalysts && (
                             <>
-                              {!analyst.deactivatedAt && (
-                                <button 
-                                  onClick={() => deactivateAnalyst(analyst.id)}
-                                  className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                  title="Desligar Analista"
-                                >
-                                  <Power className="w-5 h-5" />
-                                </button>
-                              )}
+                              <button 
+                                onClick={() => deactivateAnalyst(analyst.id)}
+                                className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                title="Desligar Analista"
+                              >
+                                <Power className="w-5 h-5" />
+                              </button>
                               <button 
                                 onClick={() => { setEditingAnalyst(analyst); setIsAddingAnalyst(true); }}
                                 disabled={!!analyst.deactivatedAt}
@@ -229,14 +227,12 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                       </button>
                       {canManageAnalysts && (
                         <>
-                          {!analyst.deactivatedAt && (
-                            <button 
-                              onClick={() => deactivateAnalyst(analyst.id)}
-                              className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Power className="w-5 h-5" />
-                            </button>
-                          )}
+                          <button 
+                            onClick={() => deactivateAnalyst(analyst.id)}
+                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Power className="w-5 h-5" />
+                          </button>
                           <button 
                             onClick={() => { setEditingAnalyst(analyst); setIsAddingAnalyst(true); }}
                             disabled={!!analyst.deactivatedAt}
