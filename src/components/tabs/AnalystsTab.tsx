@@ -25,6 +25,7 @@ interface AnalystsTabProps {
   systems: System[];
   canManageAnalysts: boolean;
   canManageAccess: boolean;
+  currentUserRole: string | undefined;
   deactivateAnalyst: (id: string) => void;
   setEditingAnalyst: (analyst: Analyst | null) => void;
   setIsAddingAnalyst: (isAdding: boolean) => void;
@@ -48,6 +49,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
   systems,
   canManageAnalysts,
   canManageAccess,
+  currentUserRole,
   deactivateAnalyst,
   setEditingAnalyst,
   setIsAddingAnalyst,
@@ -141,7 +143,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           >
                             <ShieldCheck className="w-5 h-5" />
                           </button>
-                          {canManageAnalysts && (
+                          {canManageAnalysts && currentUserRole !== 'supervisor' && currentUserRole !== 'treinador' && (
                             <>
                               <button 
                                 onClick={() => deactivateAnalyst(analyst.id)}
@@ -225,7 +227,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                       >
                         <ShieldCheck className="w-5 h-5" />
                       </button>
-                      {canManageAnalysts && (
+                      {canManageAnalysts && currentUserRole !== 'supervisor' && currentUserRole !== 'treinador' && (
                         <>
                           <button 
                             onClick={() => deactivateAnalyst(analyst.id)}

@@ -2445,6 +2445,7 @@ export default function App() {
                 systems={systems}
                 canManageAnalysts={canManageAnalysts}
                 canManageAccess={canManageAccess}
+                currentUserRole={currentUserData?.roleId}
                 deactivateAnalyst={deactivateAnalyst}
                 setEditingAnalyst={setEditingAnalyst}
                 setIsAddingAnalyst={setIsAddingAnalyst}

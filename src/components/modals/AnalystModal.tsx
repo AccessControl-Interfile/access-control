@@ -44,16 +44,81 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
   const [selectedSystemsInForm, setSelectedSystemsInForm] = useState<string[]>([]);
   const [systemSearchQuery, setSystemSearchQuery] = useState('');
 
+  const [hasChanges, setHasChanges] = useState(false);
+  const formRef = React.useRef<HTMLFormElement>(null);
+
+  const initialSystems = React.useMemo(() => {
+    if (!editingAnalyst) return [];
+    return accesses
+      .filter(a => a.analystId === editingAnalyst.id)
+      .map(a => a.systemId)
+      .sort();
+  }, [editingAnalyst, accesses]);
+
+  const checkChanges = () => {
+    if (!editingAnalyst) {
+      setHasChanges(true);
+      return;
+    }
+
+    if (!formRef.current) return;
+    const formData = new FormData(formRef.current);
+    
+    let changed = false;
+
+    // Check analyst fields
+    for (const field of analystFields) {
+      const currentValue = formData.get(field.id) as string;
+      const initialValue = editingAnalyst[field.id] || '';
+      if (currentValue !== initialValue) {
+        changed = true;
+        break;
+      }
+    }
+
+    // Check name and email specifically if they are not in analystFields
+    if (!changed) {
+      const currentName = formData.get('name') as string;
+      const initialName = editingAnalyst.name || '';
+      if (currentName !== initialName) changed = true;
+    }
+
+    if (!changed) {
+      const currentEmail = formData.get('email') as string;
+      const initialEmail = editingAnalyst.email || '';
+      if (currentEmail !== initialEmail) changed = true;
+    }
+
+    // Check systems
+    if (!changed) {
+      const currentSystems = [...selectedSystemsInForm].sort();
+      if (JSON.stringify(currentSystems) !== JSON.stringify(initialSystems)) {
+        changed = true;
+      }
+    }
+
+    setHasChanges(changed);
+  };
+
   useEffect(() => {
-    if (isOpen && editingAnalyst) {
+    if (editingAnalyst && isOpen) {
       const currentSystems = accesses
         .filter(a => a.analystId === editingAnalyst.id)
         .map(a => a.systemId);
       setSelectedSystemsInForm(currentSystems);
+      setHasChanges(false);
     } else if (isOpen) {
       setSelectedSystemsInForm([]);
+      setHasChanges(true);
     }
   }, [isOpen, editingAnalyst, accesses]);
+
+  // Re-check changes when selected systems change
+  useEffect(() => {
+    if (isOpen && editingAnalyst) {
+      checkChanges();
+    }
+  }, [selectedSystemsInForm]);
 
   if (!isOpen) return null;
 
@@ -86,7 +151,14 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
         return;
       }
 
-      if (needsApproval) {
+      // Check if analyst fields changed
+      const analystFieldsChanged = analystFields.some(field => {
+        const value = analystData[field.id];
+        const initialValue = editingAnalyst[field.id] || '';
+        return value !== initialValue;
+      }) || analystData.name !== editingAnalyst.name || analystData.email !== editingAnalyst.email;
+
+      if (needsApproval && analystFieldsChanged) {
         const requestId = Math.random().toString(36).substring(2, 15);
         const requestNumber = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
         
@@ -114,7 +186,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
           );
         }
         showToast(`Solicitação de edição (${requestNumber}) enviada para aprovação.`, "success");
-      } else if (canManageAnalysts) {
+      } else if (canManageAnalysts && analystFieldsChanged) {
         await update(ref(db, `analysts/${editingAnalyst.id}`), analystData);
         if (user?.email) {
           await logAction(
@@ -138,10 +210,8 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
       showToast("Analista criado com sucesso!", "success");
     }
 
-    // Update Accesses - only if not a request or if we want to allow access requests here too?
-    // The user didn't specify access requests here, but currently it updates accesses directly.
-    // If it's a request, we probably shouldn't update accesses yet.
-    if (analystId && !needsApproval) {
+    // Update Accesses - "gerenciar sistemas não precisa gerar requisição"
+    if (analystId) {
       const currentAccesses = accesses.filter(a => a.analystId === analystId);
       const currentSystemIds = currentAccesses.map(a => a.systemId);
 
@@ -161,6 +231,14 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
       for (const access of currentAccesses) {
         if (!selectedSystemsInForm.includes(access.systemId)) {
           await remove(ref(db, `accesses/${analystId}_${access.systemId}`));
+        }
+      }
+
+      // If only systems changed and we are a supervisor/trainer, show success
+      if (editingAnalyst && needsApproval && !analystFields.some(f => analystData[f.id] !== (editingAnalyst[f.id] || ''))) {
+        const currentSystems = [...selectedSystemsInForm].sort();
+        if (JSON.stringify(currentSystems) !== JSON.stringify(initialSystems)) {
+          showToast("Acessos atualizados com sucesso!", "success");
         }
       }
     }
@@ -195,7 +273,14 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
         </div>
         
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
-          <form id="analyst-form" key={editingAnalyst?.id || 'new_analyst'} onSubmit={handleAddAnalyst} className="space-y-8">
+          <form 
+            id="analyst-form" 
+            ref={formRef}
+            key={editingAnalyst?.id || 'new_analyst'} 
+            onSubmit={handleAddAnalyst} 
+            onChange={checkChanges}
+            className="space-y-8"
+          >
             <div>
               <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Dados do Analista</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -402,7 +487,8 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
             <button 
             type="submit"
             form="analyst-form"
-            className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
+            disabled={!hasChanges}
+            className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {editingAnalyst ? (needsApproval ? 'Solicitar Alteração' : 'Salvar Alterações') : 'Criar Analista'}
           </button>
