@@ -2107,12 +2107,17 @@ export default function App() {
             <button 
               onClick={() => { setActiveTab('request'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative",
                 activeTab === 'request' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-50"
               )}
             >
               <PlusCircle className="w-5 h-5" />
               Solicitações
+              {requests.filter(r => r.status === 'rejected' && r.requestedBy === user?.uid).length > 0 && (
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full">
+                  {requests.filter(r => r.status === 'rejected' && r.requestedBy === user?.uid).length}
+                </span>
+              )}
             </button>
           )}
 
