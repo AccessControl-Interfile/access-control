@@ -54,4 +54,8 @@
     --color-red-600: #f87171;
     --color-red-700: #fca5a5;
   }
+
+  input:not([type="password"]), textarea {
+    text-transform: uppercase;
+  }
 }

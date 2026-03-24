@@ -73,7 +73,14 @@ export const SupervisorModal: React.FC<SupervisorModalProps> = ({
           <form key={editingSupervisor?.id || 'new_supervisor'} onSubmit={handleSaveSupervisor} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Nome do Supervisor</label>
-              <input name="name" defaultValue={editingSupervisor?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: João Silva" />
+              <input 
+                name="name" 
+                defaultValue={editingSupervisor?.name} 
+                required 
+                onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                placeholder="Ex: João Silva" 
+              />
             </div>
             <div className="flex gap-3 pt-4">
               <button type="button" onClick={onClose} className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors">Cancelar</button>

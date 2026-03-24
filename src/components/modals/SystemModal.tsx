@@ -77,7 +77,14 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                       {field.label}
                     </label>
-                    <input name="name" defaultValue={editingSystem?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Salesforce" />
+                    <input 
+                      name="name" 
+                      defaultValue={editingSystem?.name} 
+                      required 
+                      onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                      placeholder="Ex: Salesforce" 
+                    />
                   </div>
                 );
               }
@@ -87,7 +94,15 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                       {field.label}
                     </label>
-                    <textarea name="description" defaultValue={editingSystem?.description} required rows={3} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Para que serve este sistema?" />
+                    <textarea 
+                      name="description" 
+                      defaultValue={editingSystem?.description} 
+                      required 
+                      rows={3} 
+                      onInput={(e) => { (e.target as HTMLTextAreaElement).value = (e.target as HTMLTextAreaElement).value.toUpperCase(); }}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                      placeholder="Para que serve este sistema?" 
+                    />
                   </div>
                 );
               }
@@ -102,6 +117,7 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                     defaultValue={editingSystem?.[field.id] || ''} 
                     autoComplete="new-password"
                     required
+                    onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                     placeholder={field.description}
                   />

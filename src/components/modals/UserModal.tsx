@@ -41,11 +41,25 @@ const UserForm = ({
     <form key={user?.id || 'new_user'} onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Nome</label>
-        <input name="name" defaultValue={user?.name} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+        <input 
+          name="name" 
+          defaultValue={user?.name} 
+          required 
+          onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+        />
       </div>
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Email</label>
-        <input name="email" type="email" defaultValue={user?.email} required disabled={!!user} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" />
+        <input 
+          name="email" 
+          type="email" 
+          defaultValue={user?.email} 
+          required 
+          disabled={!!user} 
+          onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
+        />
       </div>
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Perfil</label>

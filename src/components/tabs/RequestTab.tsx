@@ -128,7 +128,14 @@ export default function RequestTab({
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                         {field.label}
                       </label>
-                      <input name="name" required defaultValue={defaultValue} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: João Silva" />
+                      <input 
+                        name="name" 
+                        required 
+                        defaultValue={defaultValue} 
+                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                        placeholder="Ex: João Silva" 
+                      />
                     </div>
                   );
                 }
@@ -138,7 +145,15 @@ export default function RequestTab({
                       <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
                         {field.label}
                       </label>
-                      <input name="email" type="email" required defaultValue={defaultValue} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="joao.silva@empresa.com" />
+                      <input 
+                        name="email" 
+                        type="email" 
+                        required 
+                        defaultValue={defaultValue} 
+                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                        placeholder="joao.silva@empresa.com" 
+                      />
                     </div>
                   );
                 }
@@ -186,6 +201,7 @@ export default function RequestTab({
                       name={field.id} 
                       defaultValue={defaultValue}
                       required
+                      onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                       placeholder={field.description}
                     />

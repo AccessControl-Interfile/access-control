@@ -176,11 +176,28 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                     );
                   } else if (field.id === 'name') {
                     fieldContent = (
-                      <input name="name" defaultValue={editingAnalyst?.name} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="Ex: João Silva" />
+                      <input 
+                        name="name" 
+                        defaultValue={editingAnalyst?.name} 
+                        required 
+                        disabled={!canManageAnalysts} 
+                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
+                        placeholder="Ex: João Silva" 
+                      />
                     );
                   } else if (field.id === 'email') {
                     fieldContent = (
-                      <input name="email" type="email" defaultValue={editingAnalyst?.email} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" placeholder="joao.silva@empresa.com" />
+                      <input 
+                        name="email" 
+                        type="email" 
+                        defaultValue={editingAnalyst?.email} 
+                        required 
+                        disabled={!canManageAnalysts} 
+                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
+                        placeholder="joao.silva@empresa.com" 
+                      />
                     );
                   } else if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
                     fieldContent = (
@@ -213,6 +230,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         disabled={!canManageAnalysts} 
                         autoComplete="new-password"
                         required
+                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder={field.description}
                       />

@@ -368,6 +368,7 @@ export default function App() {
   const [analystStatusFilter, setAnalystStatusFilter] = useState<'all' | 'active' | 'deactivated'>('active');
   const [analystAccessStatusFilter, setAnalystAccessStatusFilter] = useState<'all' | 'ok' | 'pending' | 'lost' | 'none'>('all');
   const [analystSupervisorFilter, setAnalystSupervisorFilter] = useState<string>('all');
+  const [searchField, setSearchField] = useState<string>('all');
   const [logExportStartDate, setLogExportStartDate] = useState('');
   const [logExportEndDate, setLogExportEndDate] = useState('');
   const [logExportAllTime, setLogExportAllTime] = useState(true);
@@ -601,15 +602,16 @@ export default function App() {
     const filtered = allAnalysts.filter(a => {
       const searchLower = searchQuery.toLowerCase();
       
-      // Search across all defined fields for this analyst
-      const matchesSearch = analystFields.some(field => {
-        const val = a[field.id];
-        return val && typeof val === 'string' && val.toLowerCase().includes(searchLower);
-      }) || 
-      // Fallback to name/email/track if they exist
-      (a.name && a.name.toLowerCase().includes(searchLower)) ||
-      (a.email && a.email.toLowerCase().includes(searchLower)) ||
-      (getAnalystTrack(a) && getAnalystTrack(a).toLowerCase().includes(searchLower));
+      // Search across selected field or all fields
+      const matchesSearch = searchField === 'all' 
+        ? (analystFields.some(field => {
+            const val = a[field.id];
+            return val && typeof val === 'string' && val.toLowerCase().includes(searchLower);
+          }) || 
+          (a.name && a.name.toLowerCase().includes(searchLower)) ||
+          (a.email && a.email.toLowerCase().includes(searchLower)) ||
+          (getAnalystTrack(a) && getAnalystTrack(a).toLowerCase().includes(searchLower)))
+        : (a[searchField] && typeof a[searchField] === 'string' && a[searchField].toLowerCase().includes(searchLower));
       
       const matchesStatus = analystStatusFilter === 'all' || 
                            (analystStatusFilter === 'active' && !a.deactivatedAt) ||
@@ -644,7 +646,7 @@ export default function App() {
     });
     
     return filtered;
-  }, [allAnalysts, searchQuery, analystStatusFilter, analystAccessStatusFilter, analystSupervisorFilter, analystFields, accesses]);
+  }, [allAnalysts, searchQuery, searchField, analystStatusFilter, analystAccessStatusFilter, analystSupervisorFilter, analystFields, accesses]);
 
   const paginatedAnalysts = useMemo(() => {
     return filteredAnalysts.slice(0, analystsLimit);
@@ -2249,27 +2251,33 @@ export default function App() {
                     <option key={s.id} value={s.name}>{s.name}</option>
                   ))}
                 </select>
-                <select 
-                  value={analystStatusFilter}
-                  onChange={(e) => setAnalystStatusFilter(e.target.value as any)}
-                  className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer"
-                >
-                  <option value="active">Ativos</option>
-                  <option value="deactivated">Desligados</option>
-                  <option value="all">Todos</option>
-                </select>
               </>
             )}
             {(activeTab === 'analysts' || activeTab === 'systems') && !selectedAnalyst && (
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Buscar..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-28 sm:w-40 lg:w-64"
-                />
+              <div className="flex items-center gap-2">
+                {activeTab === 'analysts' && (
+                  <select 
+                    value={searchField}
+                    onChange={(e) => setSearchField(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-full px-3 py-2 text-[10px] font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer hidden lg:block"
+                  >
+                    <option value="all">Todos os campos</option>
+                    {analystFields.map(f => (
+                      <option key={f.id} value={f.id}>{f.label}</option>
+                    ))}
+                  </select>
+                )}
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
+                    onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                    className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-28 sm:w-40 lg:w-64"
+                  />
+                </div>
               </div>
             )}
             {activeTab === 'analysts' && !selectedAnalyst && canManageAnalysts && (
@@ -2296,6 +2304,31 @@ export default function App() {
                         className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 z-50 overflow-hidden"
                       >
                         <div className="p-2 flex flex-col gap-1">
+                          <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Status</div>
+                          <button 
+                            onClick={() => setAnalystStatusFilter('active')}
+                            className={`w-full text-left px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${analystStatusFilter === 'active' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-700 hover:bg-slate-50'}`}
+                          >
+                            <div className={`w-1.5 h-1.5 rounded-full ${analystStatusFilter === 'active' ? 'bg-indigo-600' : 'bg-slate-300'}`} />
+                            Ativos
+                          </button>
+                          <button 
+                            onClick={() => setAnalystStatusFilter('deactivated')}
+                            className={`w-full text-left px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${analystStatusFilter === 'deactivated' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-700 hover:bg-slate-50'}`}
+                          >
+                            <div className={`w-1.5 h-1.5 rounded-full ${analystStatusFilter === 'deactivated' ? 'bg-indigo-600' : 'bg-slate-300'}`} />
+                            Desligados
+                          </button>
+                          <button 
+                            onClick={() => setAnalystStatusFilter('all')}
+                            className={`w-full text-left px-4 py-2 text-sm font-medium rounded-xl transition-colors flex items-center gap-2 ${analystStatusFilter === 'all' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-700 hover:bg-slate-50'}`}
+                          >
+                            <div className={`w-1.5 h-1.5 rounded-full ${analystStatusFilter === 'all' ? 'bg-indigo-600' : 'bg-slate-300'}`} />
+                            Todos
+                          </button>
+
+                          <div className="h-px bg-slate-100 my-1" />
+                          <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Ações</div>
                           <button 
                             onClick={() => { setIsAddingAnalyst(true); setIsAnalystMenuOpen(false); }}
                             className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center gap-2"

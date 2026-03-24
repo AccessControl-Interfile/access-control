@@ -168,16 +168,35 @@ export const FieldModal: React.FC<FieldModalProps> = ({
             <form key={isAddingField.type || 'new_field'} onSubmit={handleAddField} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">ID do Campo</label>
-                <input name="id" required pattern="[a-z0-9_]+" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="ex: data_nascimento (apenas letras minúsculas e _)" />
+                <input 
+                  name="id" 
+                  required 
+                  pattern="[a-z0-9_]+" 
+                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toLowerCase(); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                  placeholder="ex: data_nascimento (apenas letras minúsculas e _)" 
+                />
                 <p className="text-[10px] text-slate-400 mt-1">Usado internamente. Não pode ser alterado depois.</p>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Rótulo (Label)</label>
-                <input name="label" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Data de Nascimento" />
+                <input 
+                  name="label" 
+                  required 
+                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                  placeholder="Ex: Data de Nascimento" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
-                <input name="description" required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Ex: Data de nascimento do colaborador" />
+                <input 
+                  name="description" 
+                  required 
+                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                  placeholder="Ex: Data de nascimento do colaborador" 
+                />
               </div>
               <div className="flex items-center gap-2 py-2">
                 <input 
@@ -209,7 +228,7 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                             </div>
                             <input 
                               value={option.value}
-                              onChange={(e) => handleUpdateOption(option.id, e.target.value)}
+                              onChange={(e) => handleUpdateOption(option.id, e.target.value.toUpperCase())}
                               required
                               className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm" 
                               placeholder={`Opção ${index + 1}`} 
@@ -263,11 +282,23 @@ export const FieldModal: React.FC<FieldModalProps> = ({
             <form key={editingField.field.id || 'edit_field'} onSubmit={handleEditField} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Rótulo (Label)</label>
-                <input name="label" defaultValue={editingField.field.label} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                <input 
+                  name="label" 
+                  defaultValue={editingField.field.label} 
+                  required 
+                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Descrição</label>
-                <input name="description" defaultValue={editingField.field.description} required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" />
+                <input 
+                  name="description" 
+                  defaultValue={editingField.field.description} 
+                  required 
+                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
+                />
               </div>
               <div className="flex items-center gap-2 py-2">
                 <input 
@@ -299,7 +330,7 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                             </div>
                             <input 
                               value={option.value}
-                              onChange={(e) => handleUpdateOption(option.id, e.target.value)}
+                              onChange={(e) => handleUpdateOption(option.id, e.target.value.toUpperCase())}
                               required
                               className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm" 
                               placeholder={`Opção ${index + 1}`} 
