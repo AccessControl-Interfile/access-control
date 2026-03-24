@@ -32,7 +32,14 @@ export const SystemModal: React.FC<SystemModalProps> = ({
     
     const systemData: any = {};
     systemFields.forEach(field => {
-      systemData[field.id] = formData.get(field.id) as string;
+      const value = formData.get(field.id) as string;
+      if (field.textCase === 'uppercase') {
+        systemData[field.id] = value.toUpperCase();
+      } else if (field.textCase === 'lowercase') {
+        systemData[field.id] = value.toLowerCase();
+      } else {
+        systemData[field.id] = value;
+      }
     });
 
     if (editingSystem) {
@@ -81,7 +88,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                       name="name" 
                       defaultValue={editingSystem?.name} 
                       required 
-                      onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                      onInput={(e) => {
+                        const input = e.target as HTMLInputElement;
+                        if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                        else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                      }}
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                       placeholder="Ex: Salesforce" 
                     />
@@ -99,7 +110,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                       defaultValue={editingSystem?.description} 
                       required 
                       rows={3} 
-                      onInput={(e) => { (e.target as HTMLTextAreaElement).value = (e.target as HTMLTextAreaElement).value.toUpperCase(); }}
+                      onInput={(e) => {
+                        const input = e.target as HTMLTextAreaElement;
+                        if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                        else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                      }}
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                       placeholder="Para que serve este sistema?" 
                     />
@@ -117,7 +132,11 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                     defaultValue={editingSystem?.[field.id] || ''} 
                     autoComplete="new-password"
                     required
-                    onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                    onInput={(e) => {
+                      const input = e.target as HTMLInputElement;
+                      if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                      else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                    }}
                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                     placeholder={field.description}
                   />

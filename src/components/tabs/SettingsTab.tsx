@@ -452,8 +452,7 @@ export default function SettingsTab({
                             type="text" 
                             placeholder="Buscar usuário..." 
                             value={userSearchQuery}
-                            onChange={(e) => setUserSearchQuery(e.target.value.toUpperCase())}
-                            onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                            onChange={(e) => setUserSearchQuery(e.target.value)}
                             className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full sm:w-64"
                         />
                     </div>

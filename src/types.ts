@@ -71,6 +71,7 @@ export interface FieldDefinition {
   description: string;
   order?: number;
   options?: string[];
+  textCase?: 'uppercase' | 'lowercase' | 'any';
 }
 
 export interface Analyst {

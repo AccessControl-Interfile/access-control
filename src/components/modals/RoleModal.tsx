@@ -34,7 +34,6 @@ export const RoleModal: React.FC<RoleModalProps> = ({
                 name="name" 
                 defaultValue={editingRole?.name} 
                 required 
-                onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
               />
             </div>

@@ -63,8 +63,16 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
     const formData = new FormData(e.currentTarget);
     
     const analystData: any = {};
+
     analystFields.forEach(field => {
-      analystData[field.id] = formData.get(field.id) as string;
+      const value = formData.get(field.id) as string;
+      if (field.textCase === 'uppercase') {
+        analystData[field.id] = value.toUpperCase();
+      } else if (field.textCase === 'lowercase') {
+        analystData[field.id] = value.toLowerCase();
+      } else {
+        analystData[field.id] = value;
+      }
     });
 
     let analystId = editingAnalyst?.id;
@@ -181,7 +189,11 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         defaultValue={editingAnalyst?.name} 
                         required 
                         disabled={!canManageAnalysts} 
-                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        onInput={(e) => {
+                          const input = e.target as HTMLInputElement;
+                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                        }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder="Ex: João Silva" 
                       />
@@ -194,7 +206,11 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         defaultValue={editingAnalyst?.email} 
                         required 
                         disabled={!canManageAnalysts} 
-                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        onInput={(e) => {
+                          const input = e.target as HTMLInputElement;
+                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                        }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder="joao.silva@empresa.com" 
                       />
@@ -230,7 +246,11 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         disabled={!canManageAnalysts} 
                         autoComplete="new-password"
                         required
-                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        onInput={(e) => {
+                          const input = e.target as HTMLInputElement;
+                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                        }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder={field.description}
                       />

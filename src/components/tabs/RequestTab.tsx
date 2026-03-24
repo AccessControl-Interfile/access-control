@@ -132,7 +132,11 @@ export default function RequestTab({
                         name="name" 
                         required 
                         defaultValue={defaultValue} 
-                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        onInput={(e) => {
+                          const input = e.target as HTMLInputElement;
+                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                        }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                         placeholder="Ex: João Silva" 
                       />
@@ -150,7 +154,11 @@ export default function RequestTab({
                         type="email" 
                         required 
                         defaultValue={defaultValue} 
-                        onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                        onInput={(e) => {
+                          const input = e.target as HTMLInputElement;
+                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                        }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                         placeholder="joao.silva@empresa.com" 
                       />
@@ -201,7 +209,11 @@ export default function RequestTab({
                       name={field.id} 
                       defaultValue={defaultValue}
                       required
-                      onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                      onInput={(e) => {
+                        const input = e.target as HTMLInputElement;
+                        if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
+                        else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                      }}
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                       placeholder={field.description}
                     />

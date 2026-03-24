@@ -79,15 +79,15 @@ import Toast, { ToastType } from './components/Toast';
 
 // Mock Initial Data
 const INITIAL_ANALYST_FIELDS: FieldDefinition[] = [
-  { id: 'name', label: 'Nome', description: 'Identificação completa do colaborador.' },
-  { id: 'email', label: 'E-mail', description: 'E-mail corporativo para contato.' },
-  { id: 'track', label: 'Esteira', description: 'Vinculação operacional do analista.' },
-  { id: 'supervisor', label: 'Supervisor', description: 'Supervisor responsável pelo analista.' },
+  { id: 'name', label: 'Nome', description: 'Identificação completa do colaborador.', textCase: 'any' },
+  { id: 'email', label: 'E-mail', description: 'E-mail corporativo para contato.', textCase: 'any' },
+  { id: 'track', label: 'Esteira', description: 'Vinculação operacional do analista.', textCase: 'any' },
+  { id: 'supervisor', label: 'Supervisor', description: 'Supervisor responsável pelo analista.', textCase: 'any' },
 ];
 
 const INITIAL_SYSTEM_FIELDS: FieldDefinition[] = [
-  { id: 'name', label: 'Nome do Sistema', description: 'Nome comercial ou técnico da ferramenta.' },
-  { id: 'description', label: 'Descrição', description: 'Finalidade e uso dentro da operação.' },
+  { id: 'name', label: 'Nome do Sistema', description: 'Nome comercial ou técnico da ferramenta.', textCase: 'any' },
+  { id: 'description', label: 'Descrição', description: 'Finalidade e uso dentro da operação.', textCase: 'any' },
 ];
 const INITIAL_SYSTEMS: System[] = [
   { id: '1', name: 'CRM Sales', description: 'Gestão de clientes e vendas' },
@@ -331,6 +331,10 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
   const [selectedAnalyst, setSelectedAnalyst] = useState<Analyst | null>(null);
+  const currentSelectedAnalyst = useMemo(() => {
+    if (!selectedAnalyst) return null;
+    return allAnalysts.find(a => a.id === selectedAnalyst.id) || selectedAnalyst;
+  }, [selectedAnalyst, allAnalysts]);
   const [editingAnalyst, setEditingAnalyst] = useState<Analyst | null>(null);
   const [editingSystem, setEditingSystem] = useState<System | null>(null);
   const [editingField, setEditingField] = useState<{ type: 'analyst' | 'system', field: FieldDefinition } | null>(null);
@@ -617,9 +621,10 @@ export default function App() {
                            (analystStatusFilter === 'active' && !a.deactivatedAt) ||
                            (analystStatusFilter === 'deactivated' && !!a.deactivatedAt);
                            
-      const matchesSupervisor = analystSupervisorFilter === 'all' || 
-                                a.supervisor === analystSupervisorFilter ||
-                                analystFields.some(f => (f.id === 'supervisor' || f.id.toLowerCase().includes('supervisor') || f.label.toLowerCase().includes('supervisor')) && a[f.id] === analystSupervisorFilter);
+      const matchesSupervisor = analystSupervisorFilter === 'all' ? true :
+                                analystSupervisorFilter === 'none' ? (!a.supervisor && !analystFields.some(f => (f.id === 'supervisor' || f.id.toLowerCase().includes('supervisor') || f.label.toLowerCase().includes('supervisor')) && a[f.id])) :
+                                (a.supervisor === analystSupervisorFilter ||
+                                analystFields.some(f => (f.id === 'supervisor' || f.id.toLowerCase().includes('supervisor') || f.label.toLowerCase().includes('supervisor')) && a[f.id] === analystSupervisorFilter));
 
       let matchesAccessStatus = true;
       if (analystAccessStatusFilter !== 'all') {
@@ -862,7 +867,13 @@ export default function App() {
       if (!value && field.id !== 'rejectionReason') { // rejectionReason is not part of the form fields usually
         hasEmptyFields = true;
       }
-      analystData[field.id] = value;
+      if (field.textCase === 'uppercase') {
+        analystData[field.id] = value.toUpperCase();
+      } else if (field.textCase === 'lowercase') {
+        analystData[field.id] = value.toLowerCase();
+      } else {
+        analystData[field.id] = value;
+      }
     });
 
     if (hasEmptyFields) {
@@ -2228,7 +2239,7 @@ export default function App() {
             >
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            {activeTab === 'analysts' && !selectedAnalyst && (
+            {activeTab === 'analysts' && !currentSelectedAnalyst && (
               <>
                 <select 
                   value={analystAccessStatusFilter}
@@ -2247,13 +2258,14 @@ export default function App() {
                   className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-bold text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer hidden md:block"
                 >
                   <option value="all">Qualquer supervisor</option>
+                  <option value="none">Sem Supervisor</option>
                   {mergedSupervisors.slice().sort((a, b) => a.name.localeCompare(b.name)).map(s => (
                     <option key={s.id} value={s.name}>{s.name}</option>
                   ))}
                 </select>
               </>
             )}
-            {(activeTab === 'analysts' || activeTab === 'systems') && !selectedAnalyst && (
+            {(activeTab === 'analysts' || activeTab === 'systems') && !currentSelectedAnalyst && (
               <div className="flex items-center gap-2">
                 {activeTab === 'analysts' && (
                   <select 
@@ -2273,14 +2285,13 @@ export default function App() {
                     type="text" 
                     placeholder="Buscar..." 
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
-                    onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-28 sm:w-40 lg:w-64"
                   />
                 </div>
               </div>
             )}
-            {activeTab === 'analysts' && !selectedAnalyst && canManageAnalysts && (
+            {activeTab === 'analysts' && !currentSelectedAnalyst && canManageAnalysts && (
               <div className="relative">
                 <button 
                   onClick={() => setIsAnalystMenuOpen(!isAnalystMenuOpen)}
@@ -2387,7 +2398,7 @@ export default function App() {
             {activeTab === 'analysts' && (
               <AnalystsTab 
                 key="analysts"
-                selectedAnalyst={selectedAnalyst}
+                selectedAnalyst={currentSelectedAnalyst}
                 setSelectedAnalyst={setSelectedAnalyst}
                 paginatedAnalysts={paginatedAnalysts}
                 filteredAnalysts={filteredAnalysts}

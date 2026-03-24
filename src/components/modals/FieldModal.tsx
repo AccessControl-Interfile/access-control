@@ -4,6 +4,7 @@ import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { ref, set } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { FieldDefinition, Permission, User } from '../../types';
+import { cn } from '../../lib/utils';
 
 interface OptionItem {
   id: string;
@@ -35,10 +36,12 @@ export const FieldModal: React.FC<FieldModalProps> = ({
 }) => {
   const [hasOptions, setHasOptions] = useState(false);
   const [options, setOptions] = useState<OptionItem[]>([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
+  const [textCase, setTextCase] = useState<'uppercase' | 'lowercase' | 'any'>('any');
 
   useEffect(() => {
     if (editingField) {
       setHasOptions(!!editingField.field.options);
+      setTextCase(editingField.field.textCase || 'any');
       if (editingField.field.options) {
         setOptions(editingField.field.options.map(opt => ({ id: Math.random().toString(36).substr(2, 9), value: opt })));
       } else {
@@ -46,6 +49,7 @@ export const FieldModal: React.FC<FieldModalProps> = ({
       }
     } else {
       setHasOptions(false);
+      setTextCase('any');
       setOptions([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
     }
   }, [editingField, isAddingField]);
@@ -110,13 +114,17 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     }
 
     if (isAddingField?.type === 'analyst') {
-      const newFields = [...analystFields, { id, label, description, options: fieldOptions }];
+      const fieldData: FieldDefinition = { id, label, description, textCase };
+      if (fieldOptions) fieldData.options = fieldOptions;
+      const newFields = [...analystFields, fieldData];
       set(ref(db, 'config/analystFields'), newFields);
       if (user?.email) {
         logAction(user.email, 'ADD_ANALYST_FIELD', `Adicionou campo de analista: ${label}`, 'Configurações');
       }
     } else if (isAddingField?.type === 'system') {
-      const newFields = [...systemFields, { id, label, description, options: fieldOptions }];
+      const fieldData: FieldDefinition = { id, label, description, textCase };
+      if (fieldOptions) fieldData.options = fieldOptions;
+      const newFields = [...systemFields, fieldData];
       set(ref(db, 'config/systemFields'), newFields);
       if (user?.email) {
         logAction(user.email, 'ADD_SYSTEM_FIELD', `Adicionou campo de sistema: ${label}`, 'Configurações');
@@ -143,10 +151,32 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     }
     
     if (editingField.type === 'analyst') {
-      const updated = analystFields.map(f => f.id === editingField.field.id ? { ...f, label, description, options: fieldOptions } : f);
+      const updated = analystFields.map(f => {
+        if (f.id === editingField.field.id) {
+          const fieldData: FieldDefinition = { ...f, label, description, textCase };
+          if (fieldOptions) {
+            fieldData.options = fieldOptions;
+          } else {
+            delete fieldData.options;
+          }
+          return fieldData;
+        }
+        return f;
+      });
       set(ref(db, 'config/analystFields'), updated);
     } else {
-      const updated = systemFields.map(f => f.id === editingField.field.id ? { ...f, label, description, options: fieldOptions } : f);
+      const updated = systemFields.map(f => {
+        if (f.id === editingField.field.id) {
+          const fieldData: FieldDefinition = { ...f, label, description, textCase };
+          if (fieldOptions) {
+            fieldData.options = fieldOptions;
+          } else {
+            delete fieldData.options;
+          }
+          return fieldData;
+        }
+        return f;
+      });
       set(ref(db, 'config/systemFields'), updated);
     }
     onClose();
@@ -183,7 +213,6 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                 <input 
                   name="label" 
                   required 
-                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                   placeholder="Ex: Data de Nascimento" 
                 />
@@ -193,10 +222,50 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                 <input 
                   name="description" 
                   required 
-                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                   placeholder="Ex: Data de nascimento do colaborador" 
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Formatação de Texto</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTextCase('uppercase')}
+                    className={cn(
+                      "flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                      textCase === 'uppercase' 
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" 
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    MAIÚSCULAS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextCase('lowercase')}
+                    className={cn(
+                      "flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                      textCase === 'lowercase' 
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" 
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    minúsculas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextCase('any')}
+                    className={cn(
+                      "flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                      textCase === 'any' 
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" 
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    Qualquer Uma
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-2 py-2">
                 <input 
@@ -286,7 +355,6 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                   name="label" 
                   defaultValue={editingField.field.label} 
                   required 
-                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                 />
               </div>
@@ -296,9 +364,49 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                   name="description" 
                   defaultValue={editingField.field.description} 
                   required 
-                  onInput={(e) => { (e.target as HTMLInputElement).value = (e.target as HTMLInputElement).value.toUpperCase(); }}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Formatação de Texto</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTextCase('uppercase')}
+                    className={cn(
+                      "flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                      textCase === 'uppercase' 
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" 
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    MAIÚSCULAS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextCase('lowercase')}
+                    className={cn(
+                      "flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                      textCase === 'lowercase' 
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" 
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    minúsculas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTextCase('any')}
+                    className={cn(
+                      "flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all",
+                      textCase === 'any' 
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" 
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    )}
+                  >
+                    Qualquer Uma
+                  </button>
+                </div>
               </div>
               <div className="flex items-center gap-2 py-2">
                 <input 
