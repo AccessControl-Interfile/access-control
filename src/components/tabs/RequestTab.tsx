@@ -326,7 +326,7 @@ export default function RequestTab({
                 <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      {request.type === 'status_change' ? 'Mudança de Status' : `${request.systemIds?.length || 0} ${request.systemIds?.length === 1 ? 'Sistema' : 'Sistemas'}`}
+                      {request.type === 'status_change' ? 'Mudança de Status' : request.type === 'edit_analyst' ? 'Edição de Analista' : `${request.systemIds?.length || 0} ${request.systemIds?.length === 1 ? 'Sistema' : 'Sistemas'}`}
                     </span>
                     <div className="flex items-center gap-2">
                       <button 

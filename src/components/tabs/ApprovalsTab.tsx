@@ -153,6 +153,31 @@ export default function ApprovalsTab({
                         </div>
                       </div>
                     </div>
+                  ) : selectedRequestForApproval.type === 'edit_analyst' ? (
+                    <div className="col-span-full space-y-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Edição de Dados do Analista</h4>
+                      <div className="grid grid-cols-1 gap-3">
+                        {analystFields.map(field => {
+                          const oldValue = selectedRequestForApproval.previousAnalystData?.[field.id];
+                          const newValue = selectedRequestForApproval.analystData?.[field.id];
+                          
+                          if (oldValue === newValue) return null;
+
+                          return (
+                            <div key={field.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{field.label}</p>
+                                <div className="flex items-center gap-3">
+                                  <span className="text-xs text-slate-500 line-through truncate">{oldValue || 'Vazio'}</span>
+                                  <ChevronRight className="w-3 h-3 text-slate-300 shrink-0" />
+                                  <span className="text-sm font-bold text-indigo-600 truncate">{newValue || 'Vazio'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   ) : (
                     <>
                       <div>
@@ -225,7 +250,7 @@ export default function ApprovalsTab({
                   onClick={() => handleApproveRequest(selectedRequestForApproval)}
                   className="flex-1 px-4 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
                 >
-                  {selectedRequestForApproval.type === 'status_change' ? 'Aprovar Mudança' : 'Aprovar Criação'}
+                  {selectedRequestForApproval.type === 'status_change' ? 'Aprovar Mudança' : selectedRequestForApproval.type === 'edit_analyst' ? 'Aprovar Edição' : 'Aprovar Criação'}
                 </button>
               </div>
             </motion.div>

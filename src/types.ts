@@ -96,8 +96,9 @@ export interface Access {
 export interface AccessRequest {
   id: string;
   requestNumber: string;
-  type?: 'new_analyst' | 'status_change';
+  type?: 'new_analyst' | 'status_change' | 'edit_analyst';
   analystData?: Partial<Analyst>;
+  previousAnalystData?: Partial<Analyst>;
   systemIds?: string[];
   statusChangeData?: {
     analystId: string;

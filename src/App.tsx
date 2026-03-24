@@ -1003,6 +1003,43 @@ export default function App() {
       return;
     }
 
+    if (request.type === 'edit_analyst') {
+      const analystId = request.analystData?.id;
+      if (!analystId) return;
+
+      const analystData = { ...request.analystData };
+      
+      // Ensure no undefined values
+      Object.keys(analystData).forEach(key => {
+        if (analystData[key] === undefined) delete analystData[key];
+      });
+
+      await update(ref(db, `analysts/${analystId}`), analystData);
+
+      // Update Request
+      await update(ref(db, `requests/${request.id}`), {
+        status: 'approved',
+        approvedBy: user?.uid || '',
+        approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
+        approvedAt: new Date().toISOString()
+      });
+
+      if (user?.email) {
+        await logAction(
+          user.email, 
+          'APPROVE_REQUEST', 
+          `Aprovou edição de dados do analista ${getAnalystDisplayName(analystData as Analyst)}`, 
+          'Solicitações',
+          request,
+          analystData
+        );
+      }
+
+      setSelectedRequestForApproval(null);
+      showToast("Edição de analista aprovada!", "success");
+      return;
+    }
+
     const analystId = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
     const createdAt = new Date().toISOString();
 
@@ -2713,7 +2750,7 @@ export default function App() {
           accesses={accesses}
           canManageAnalysts={canManageAnalysts}
           canManageAccess={canManageAccess}
-          user={user}
+          user={currentUserData || null}
           logAction={logAction}
           getAnalystDisplayName={getAnalystDisplayName}
           getAnalystTrack={getAnalystTrack}

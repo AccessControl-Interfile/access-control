@@ -4,7 +4,7 @@ import { X, Search, Check } from 'lucide-react';
 import { ref, set, update, remove } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { cn } from '../../lib/utils';
-import { Analyst, FieldDefinition, Track, System, Access, User, Supervisor } from '../../types';
+import { Analyst, FieldDefinition, Track, System, Access, User, Supervisor, AccessRequest } from '../../types';
 
 interface AnalystModalProps {
   isOpen: boolean;
@@ -57,9 +57,12 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
 
   if (!isOpen) return null;
 
+  const canEdit = canManageAnalysts || user?.roleId === 'supervisor' || user?.roleId === 'treinador';
+  const needsApproval = user?.roleId === 'supervisor' || user?.roleId === 'treinador';
+
   const handleAddAnalyst = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!canManageAnalysts && !canManageAccess) return;
+    if (!canEdit && !canManageAccess) return;
     const formData = new FormData(e.currentTarget);
     
     const analystData: any = {};
@@ -82,7 +85,36 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
         showToast("Este analista está desligado e não pode ser editado.", "error");
         return;
       }
-      if (canManageAnalysts) {
+
+      if (needsApproval) {
+        const requestId = Math.random().toString(36).substring(2, 15);
+        const requestNumber = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+        
+        const requestData: AccessRequest = {
+          id: requestId,
+          requestNumber,
+          type: 'edit_analyst',
+          status: 'pending',
+          requestedBy: user?.id || '',
+          requestedByName: user?.name || user?.email || 'Supervisor/Treinador',
+          requestedAt: new Date().toISOString(),
+          analystData: { ...editingAnalyst, ...analystData },
+          previousAnalystData: editingAnalyst
+        };
+
+        await set(ref(db, `requests/${requestId}`), requestData);
+        if (user?.email) {
+          await logAction(
+            user.email, 
+            'CREATE_REQUEST', 
+            `Solicitou edição de dados do analista: ${getAnalystDisplayName(editingAnalyst)}`, 
+            'Solicitações',
+            editingAnalyst,
+            requestData
+          );
+        }
+        showToast(`Solicitação de edição (${requestNumber}) enviada para aprovação.`, "success");
+      } else if (canManageAnalysts) {
         await update(ref(db, `analysts/${editingAnalyst.id}`), analystData);
         if (user?.email) {
           await logAction(
@@ -94,6 +126,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
             { ...editingAnalyst, ...analystData }
           );
         }
+        showToast("Analista atualizado com sucesso!", "success");
       }
     } else if (canManageAnalysts) {
       analystId = crypto.randomUUID();
@@ -102,10 +135,13 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
       if (user?.email) {
         await logAction(user.email, 'CREATE_ANALYST', `Criou analista: ${getAnalystDisplayName(analystData)}`, 'Analistas');
       }
+      showToast("Analista criado com sucesso!", "success");
     }
 
-    // Update Accesses
-    if (analystId) {
+    // Update Accesses - only if not a request or if we want to allow access requests here too?
+    // The user didn't specify access requests here, but currently it updates accesses directly.
+    // If it's a request, we probably shouldn't update accesses yet.
+    if (analystId && !needsApproval) {
       const currentAccesses = accesses.filter(a => a.analystId === analystId);
       const currentSystemIds = currentAccesses.map(a => a.systemId);
 
@@ -132,7 +168,6 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
     onClose();
     setSelectedSystemsInForm([]);
     setSystemSearchQuery('');
-    showToast(editingAnalyst ? "Analista atualizado com sucesso!" : "Analista criado com sucesso!", "success");
   };
 
   return (
@@ -173,7 +208,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         name={field.id} 
                         defaultValue={editingAnalyst?.[field.id] || ''} 
                         required 
-                        disabled={!canManageAnalysts} 
+                        disabled={!canEdit} 
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60"
                       >
                         <option value="">Selecione uma opção...</option>
@@ -188,7 +223,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         name="name" 
                         defaultValue={editingAnalyst?.name} 
                         required 
-                        disabled={!canManageAnalysts} 
+                        disabled={!canEdit} 
                         onInput={(e) => {
                           const input = e.target as HTMLInputElement;
                           if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
@@ -205,7 +240,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         type="email" 
                         defaultValue={editingAnalyst?.email} 
                         required 
-                        disabled={!canManageAnalysts} 
+                        disabled={!canEdit} 
                         onInput={(e) => {
                           const input = e.target as HTMLInputElement;
                           if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
@@ -217,7 +252,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                     );
                   } else if (field.id === 'track' || field.id === 'esteira' || field.id.toLowerCase().includes('esteira')) {
                     fieldContent = (
-                      <select name={field.id} defaultValue={getAnalystTrack(editingAnalyst || {} as Analyst)} required disabled={!canManageAnalysts} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
+                      <select name={field.id} defaultValue={getAnalystTrack(editingAnalyst || {} as Analyst)} required disabled={!canEdit} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60">
                         {tracks.slice().sort((a, b) => a.name.localeCompare(b.name)).map(track => (
                           <option key={track.id} value={track.name}>{track.name}</option>
                         ))}
@@ -229,7 +264,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         name={field.id} 
                         defaultValue={editingAnalyst?.[field.id] || ''} 
                         required 
-                        disabled={!canManageAnalysts} 
+                        disabled={!canEdit} 
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60"
                       >
                         <option value="">Selecione um supervisor...</option>
@@ -243,7 +278,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                       <input 
                         name={field.id} 
                         defaultValue={editingAnalyst?.[field.id] || ''} 
-                        disabled={!canManageAnalysts} 
+                        disabled={!canEdit} 
                         autoComplete="new-password"
                         required
                         onInput={(e) => {
@@ -364,12 +399,12 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
           >
             Cancelar
           </button>
-          <button 
+            <button 
             type="submit"
             form="analyst-form"
             className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
           >
-            {editingAnalyst ? 'Salvar Alterações' : 'Criar Analista'}
+            {editingAnalyst ? (needsApproval ? 'Solicitar Alteração' : 'Salvar Alterações') : 'Criar Analista'}
           </button>
         </div>
       </motion.div>
