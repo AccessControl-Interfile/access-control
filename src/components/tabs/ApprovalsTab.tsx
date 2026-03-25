@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ClipboardCheck, X, ChevronRight } from 'lucide-react';
+import { ClipboardCheck, X, ChevronRight, Search, Loader2 } from 'lucide-react';
 import { AccessRequest, System, FieldDefinition } from '../../types';
 
 interface ApprovalsTabProps {
@@ -18,6 +18,9 @@ interface ApprovalsTabProps {
   getAnalystDisplayName: (analyst: any) => string;
   getAnalystEmail: (analyst: any) => string;
   getAnalystTrack: (analyst: any) => string;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  isProcessing: boolean;
 }
 
 export default function ApprovalsTab({
@@ -33,8 +36,19 @@ export default function ApprovalsTab({
   getAnalystInitials,
   getAnalystDisplayName,
   getAnalystEmail,
-  getAnalystTrack
+  getAnalystTrack,
+  searchQuery,
+  setSearchQuery,
+  isProcessing
 }: ApprovalsTabProps) {
+  const filteredRequests = requests
+    .filter(r => r.status === 'pending')
+    .filter(r => {
+      if (!searchQuery) return true;
+      return r.requestNumber.toLowerCase().includes(searchQuery.toLowerCase());
+    })
+    .sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime());
+
   return (
     <motion.div 
       key="approvals"
@@ -43,18 +57,26 @@ export default function ApprovalsTab({
       exit={{ opacity: 0, x: -20 }}
       className="space-y-6"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Aprovações Pendentes</h2>
           <p className="text-slate-500">Analise e aprove as solicitações de novos analistas.</p>
         </div>
+        
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input 
+            type="text"
+            placeholder="Buscar por Nº..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {requests
-          .filter(r => r.status === 'pending')
-          .sort((a, b) => new Date(a.requestedAt).getTime() - new Date(b.requestedAt).getTime())
-          .map(request => (
+        {filteredRequests.map(request => (
             <div key={request.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
@@ -78,7 +100,7 @@ export default function ApprovalsTab({
             </div>
           ))}
         
-        {requests.filter(r => r.status === 'pending').length === 0 && (
+        {filteredRequests.length === 0 && (
           <div className="col-span-full bg-white rounded-3xl border border-slate-200 shadow-sm p-12 text-center">
             <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
               <ClipboardCheck className="w-8 h-8 text-slate-200" />
@@ -241,16 +263,21 @@ export default function ApprovalsTab({
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
                 <button 
                   onClick={() => handleRejectRequest(selectedRequestForApproval.id, rejectionReason)}
-                  className="flex-1 px-4 py-4 bg-white text-rose-600 border border-rose-200 font-bold rounded-2xl hover:bg-rose-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={!rejectionReason.trim()}
+                  className="flex-1 px-4 py-4 bg-white text-rose-600 border border-rose-200 font-bold rounded-2xl hover:bg-rose-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={!rejectionReason.trim() || isProcessing}
                 >
-                  Rejeitar
+                  {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Rejeitar'}
                 </button>
                 <button 
                   onClick={() => handleApproveRequest(selectedRequestForApproval)}
-                  className="flex-1 px-4 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
+                  className="flex-1 px-4 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={isProcessing}
                 >
-                  {selectedRequestForApproval.type === 'status_change' ? 'Aprovar Mudança' : selectedRequestForApproval.type === 'edit_analyst' ? 'Aprovar Edição' : 'Aprovar Criação'}
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    selectedRequestForApproval.type === 'status_change' ? 'Aprovar Mudança' : selectedRequestForApproval.type === 'edit_analyst' ? 'Aprovar Edição' : 'Aprovar Criação'
+                  )}
                 </button>
               </div>
             </motion.div>
