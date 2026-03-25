@@ -68,8 +68,8 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
 
     // Check analyst fields
     for (const field of analystFields) {
-      const currentValue = formData.get(field.id) as string;
-      const initialValue = editingAnalyst[field.id] || '';
+      const currentValue = (formData.get(field.id) as string || '').trim();
+      const initialValue = (editingAnalyst[field.id] || '').trim();
       if (currentValue !== initialValue) {
         changed = true;
         break;
@@ -78,21 +78,22 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
 
     // Check name and email specifically if they are not in analystFields
     if (!changed) {
-      const currentName = formData.get('name') as string;
-      const initialName = editingAnalyst.name || '';
+      const currentName = (formData.get('name') as string || '').trim();
+      const initialName = (editingAnalyst.name || '').trim();
       if (currentName !== initialName) changed = true;
     }
 
     if (!changed) {
-      const currentEmail = formData.get('email') as string;
-      const initialEmail = editingAnalyst.email || '';
+      const currentEmail = (formData.get('email') as string || '').trim();
+      const initialEmail = (editingAnalyst.email || '').trim();
       if (currentEmail !== initialEmail) changed = true;
     }
 
     // Check systems
     if (!changed) {
       const currentSystems = [...selectedSystemsInForm].sort();
-      if (JSON.stringify(currentSystems) !== JSON.stringify(initialSystems)) {
+      const initialSystemsSorted = [...initialSystems].sort();
+      if (JSON.stringify(currentSystems) !== JSON.stringify(initialSystemsSorted)) {
         changed = true;
       }
     }
@@ -153,10 +154,10 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
 
       // Check if analyst fields changed
       const analystFieldsChanged = analystFields.some(field => {
-        const value = analystData[field.id];
-        const initialValue = editingAnalyst[field.id] || '';
+        const value = (analystData[field.id] || '').trim();
+        const initialValue = (editingAnalyst[field.id] || '').trim();
         return value !== initialValue;
-      }) || analystData.name !== editingAnalyst.name || analystData.email !== editingAnalyst.email;
+      }) || (analystData.name || '').trim() !== (editingAnalyst.name || '').trim() || (analystData.email || '').trim() !== (editingAnalyst.email || '').trim();
 
       if (needsApproval && analystFieldsChanged) {
         const requestId = Math.random().toString(36).substring(2, 15);

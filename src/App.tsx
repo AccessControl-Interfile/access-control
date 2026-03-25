@@ -424,23 +424,12 @@ export default function App() {
       requests: ref(db, 'requests'),
     };
 
-    // Query for analysts with pagination and search
-    let analystsQuery;
-    if (debouncedSearchQuery) {
-      analystsQuery = query(
-        refs.analysts,
-        orderByChild('name'),
-        startAt(debouncedSearchQuery),
-        endAt(debouncedSearchQuery + '\uf8ff'),
-        limitToFirst(analystsLimit)
-      );
-    } else {
-      analystsQuery = query(
-        refs.analysts,
-        orderByChild('name'),
-        limitToFirst(analystsLimit)
-      );
-    }
+    // Query for analysts with pagination
+    const analystsQuery = query(
+      refs.analysts,
+      orderByChild('name'),
+      limitToFirst(analystsLimit)
+    );
 
     const unsubscribes = [
       onValue(refs.users, (snapshot) => {
@@ -2794,7 +2783,7 @@ export default function App() {
             setEditingTrack(null);
           }}
           user={user}
-          analysts={analysts}
+          analysts={allAnalysts}
           getAnalystTrack={getAnalystTrack}
           logAction={logAction}
         />

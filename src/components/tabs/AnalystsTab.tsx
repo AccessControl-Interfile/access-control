@@ -143,7 +143,11 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           >
                             <ShieldCheck className="w-5 h-5" />
                           </button>
-                          {canManageAnalysts && currentUserRole !== 'supervisor' && currentUserRole !== 'treinador' && (
+                          {canManageAnalysts && 
+                           currentUserRole !== 'supervisor' && 
+                           currentUserRole !== 'treinador' && 
+                           currentUserRole !== 'Supervisor' && 
+                           currentUserRole !== 'Treinador' && (
                             <>
                               <button 
                                 onClick={() => deactivateAnalyst(analyst.id)}
@@ -227,7 +231,11 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                       >
                         <ShieldCheck className="w-5 h-5" />
                       </button>
-                      {canManageAnalysts && currentUserRole !== 'supervisor' && currentUserRole !== 'treinador' && (
+                      {canManageAnalysts && 
+                       currentUserRole !== 'supervisor' && 
+                       currentUserRole !== 'treinador' && 
+                       currentUserRole !== 'Supervisor' && 
+                       currentUserRole !== 'Treinador' && (
                         <>
                           <button 
                             onClick={() => deactivateAnalyst(analyst.id)}
