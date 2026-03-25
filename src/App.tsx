@@ -348,6 +348,8 @@ export default function App() {
   const [isAddingField, setIsAddingField] = useState<{ type: 'analyst' | 'system' } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [approvalSearchQuery, setApprovalSearchQuery] = useState('');
+  const [isProcessingApproval, setIsProcessingApproval] = useState(false);
 
   const [usersLimit, setUsersLimit] = useState(10);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -949,61 +951,129 @@ export default function App() {
   };
 
   const handleApproveRequest = async (request: AccessRequest) => {
-    if (!hasPermission('approve_access')) return;
+    if (!hasPermission('approve_access') || isProcessingApproval) return;
     
-    const currentUserData = users.find(u => u.id === user?.uid);
-
-    if (request.type === 'status_change' && request.statusChangeData) {
-      const { analystId, systemId, newStatus } = request.statusChangeData;
-      const analyst = allAnalysts.find(a => a.id === analystId);
-      const system = systems.find(s => s.id === systemId);
+    setIsProcessingApproval(true);
+    try {
+      // Check if request is already processed
+      const requestSnap = await get(ref(db, `requests/${request.id}`));
+      const currentRequestData = requestSnap.val();
       
-      const accessRef = ref(db, `accesses/${analystId}_${systemId}`);
-      const newData = {
-        analystId,
-        systemId,
-        status: newStatus,
-        updatedAt: new Date().toISOString()
-      };
-
-      await set(accessRef, newData);
-
-      // Update Request
-      await update(ref(db, `requests/${request.id}`), {
-        status: 'approved',
-        approvedBy: user?.uid || '',
-        approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
-        approvedAt: new Date().toISOString()
-      });
-
-      if (user?.email) {
-        await logAction(
-          user.email, 
-          'APPROVE_REQUEST', 
-          `Aprovou mudança de status do sistema ${system?.name || systemId} para o analista ${getAnalystDisplayName(analyst)}: ${newStatus}`, 
-          'Solicitações',
-          request,
-          newData
-        );
+      if (!currentRequestData || currentRequestData.status !== 'pending') {
+        showToast("Esta solicitação já foi processada.", "info");
+        setSelectedRequestForApproval(null);
+        return;
       }
 
-      setSelectedRequestForApproval(null);
-      showToast("Mudança de status aprovada!", "success");
-      return;
-    }
+      const currentUserData = users.find(u => u.id === user?.uid);
 
-    if (request.type === 'edit_analyst') {
-      const analystId = request.analystData?.id;
-      if (!analystId) return;
+      if (request.type === 'status_change' && request.statusChangeData) {
+        const { analystId, systemId, newStatus } = request.statusChangeData;
+        const analyst = allAnalysts.find(a => a.id === analystId);
+        const system = systems.find(s => s.id === systemId);
+        
+        const accessRef = ref(db, `accesses/${analystId}_${systemId}`);
+        const newData = {
+          analystId,
+          systemId,
+          status: newStatus,
+          updatedAt: new Date().toISOString()
+        };
 
-      const analystData = { ...request.analystData };
-      
+        await set(accessRef, newData);
+
+        // Update Request
+        await update(ref(db, `requests/${request.id}`), {
+          status: 'approved',
+          approvedBy: user?.uid || '',
+          approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
+          approvedAt: new Date().toISOString()
+        });
+
+        if (user?.email) {
+          await logAction(
+            user.email, 
+            'APPROVE_REQUEST', 
+            `Aprovou mudança de status do sistema ${system?.name || systemId} para o analista ${getAnalystDisplayName(analyst)}: ${newStatus}`, 
+            'Solicitações',
+            request,
+            newData
+          );
+        }
+
+        setSelectedRequestForApproval(null);
+        showToast("Mudança de status aprovada!", "success");
+        return;
+      }
+
+      if (request.type === 'edit_analyst') {
+        const analystId = request.analystData?.id;
+        if (!analystId) return;
+
+        const analystData = { ...request.analystData };
+        
+        // Ensure no undefined values
+        Object.keys(analystData).forEach(key => {
+          if (analystData[key] === undefined) delete analystData[key];
+        });
+
+        await update(ref(db, `analysts/${analystId}`), analystData);
+
+        // Update Request
+        await update(ref(db, `requests/${request.id}`), {
+          status: 'approved',
+          approvedBy: user?.uid || '',
+          approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
+          approvedAt: new Date().toISOString()
+        });
+
+        if (user?.email) {
+          await logAction(
+            user.email, 
+            'APPROVE_REQUEST', 
+            `Aprovou edição de dados do analista ${getAnalystDisplayName(analystData as Analyst)}`, 
+            'Solicitações',
+            request,
+            analystData
+          );
+        }
+
+        setSelectedRequestForApproval(null);
+        showToast("Edição de analista aprovada!", "success");
+        return;
+      }
+
+      // For creation requests, use request.id as analystId to ensure idempotency
+      const analystId = request.id;
+      const createdAt = new Date().toISOString();
+
+      // Create Analyst
+      const analystData: any = { 
+        ...request.analystData, 
+        id: analystId, 
+        createdAt,
+        approvedBy: user?.uid || '',
+        approvedByName: currentUserData?.name || user?.email || 'Desconhecido'
+      };
+
       // Ensure no undefined values
       Object.keys(analystData).forEach(key => {
         if (analystData[key] === undefined) delete analystData[key];
       });
 
-      await update(ref(db, `analysts/${analystId}`), analystData);
+      await set(ref(db, `analysts/${analystId}`), analystData);
+
+      // Create Accesses
+      if (request.systemIds) {
+        for (const systemId of request.systemIds) {
+          await set(ref(db, `accesses/${analystId}_${systemId}`), {
+            analystId,
+            systemId,
+            status: 'Pendente',
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
 
       // Update Request
       await update(ref(db, `requests/${request.id}`), {
@@ -1017,7 +1087,7 @@ export default function App() {
         await logAction(
           user.email, 
           'APPROVE_REQUEST', 
-          `Aprovou edição de dados do analista ${getAnalystDisplayName(analystData as Analyst)}`, 
+          `Aprovou solicitação ${request.requestNumber} para o analista ${getAnalystDisplayName(analystData)}`, 
           'Solicitações',
           request,
           analystData
@@ -1025,104 +1095,65 @@ export default function App() {
       }
 
       setSelectedRequestForApproval(null);
-      showToast("Edição de analista aprovada!", "success");
-      return;
+      showToast("Solicitação aprovada e analista criado!", "success");
+    } catch (error) {
+      console.error("Error approving request:", error);
+      showToast("Erro ao aprovar solicitação.", "error");
+    } finally {
+      setIsProcessingApproval(false);
     }
-
-    const analystId = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15));
-    const createdAt = new Date().toISOString();
-
-    // Create Analyst
-    const analystData: any = { 
-      ...request.analystData, 
-      id: analystId, 
-      createdAt,
-      approvedBy: user?.uid || '',
-      approvedByName: currentUserData?.name || user?.email || 'Desconhecido'
-    };
-
-    // Ensure no undefined values
-    Object.keys(analystData).forEach(key => {
-      if (analystData[key] === undefined) delete analystData[key];
-    });
-
-    await set(ref(db, `analysts/${analystId}`), analystData);
-
-    // Create Accesses
-    if (request.systemIds) {
-      for (const systemId of request.systemIds) {
-        await set(ref(db, `accesses/${analystId}_${systemId}`), {
-          analystId,
-          systemId,
-          status: 'Pendente',
-          updatedAt: new Date().toISOString()
-        });
-      }
-    }
-
-    // Update Request
-    await update(ref(db, `requests/${request.id}`), {
-      status: 'approved',
-      approvedBy: user?.uid || '',
-      approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
-      approvedAt: new Date().toISOString()
-    });
-
-    if (user?.email) {
-      await logAction(
-        user.email, 
-        'APPROVE_REQUEST', 
-        `Aprovou solicitação ${request.requestNumber} para o analista ${getAnalystDisplayName(analystData)}`, 
-        'Solicitações',
-        request,
-        analystData
-      );
-    }
-
-    setSelectedRequestForApproval(null);
-    showToast("Solicitação aprovada e analista criado!", "success");
   };
 
   const handleRejectRequest = async (requestId: string, reason: string) => {
-    if (!hasPermission('approve_access')) return;
+    if (!hasPermission('approve_access') || isProcessingApproval) return;
     
     if (!reason || !reason.trim()) {
       showToast("O motivo da rejeição é obrigatório.", "error");
       return;
     }
 
-    const currentUserData = users.find(u => u.id === user?.uid);
+    setIsProcessingApproval(true);
+    try {
+      // Check if request is already processed
+      const requestSnap = await get(ref(db, `requests/${requestId}`));
+      const currentRequestData = requestSnap.val();
+      
+      if (!currentRequestData || currentRequestData.status !== 'pending') {
+        showToast("Esta solicitação já foi processada.", "info");
+        setSelectedRequestForApproval(null);
+        return;
+      }
 
-    await update(ref(db, `requests/${requestId}`), {
-      status: 'rejected',
-      approvedBy: user?.uid || '',
-      approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
-      approvedAt: new Date().toISOString(),
-      rejectionReason: reason.trim()
-    });
+      const currentUserData = users.find(u => u.id === user?.uid);
 
-    if (user?.email) {
-      const request = requests.find(r => r.id === requestId);
-      const newData = {
+      await update(ref(db, `requests/${requestId}`), {
         status: 'rejected',
         approvedBy: user?.uid || '',
         approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
         approvedAt: new Date().toISOString(),
         rejectionReason: reason.trim()
-      };
-      await logAction(
-        user.email, 
-        'REJECT_REQUEST', 
-        `Rejeitou solicitação ${request?.requestNumber || requestId}. Motivo: ${reason.trim()}`, 
-        'Solicitações',
-        request,
-        { ...request, ...newData }
-      );
-    }
+      });
 
-    setSelectedRequestForApproval(null);
-    setRejectionReason('');
-    showToast("Solicitação rejeitada.", "info");
+      if (user?.email) {
+        await logAction(
+          user.email, 
+          'REJECT_REQUEST', 
+          `Rejeitou solicitação ${currentRequestData.requestNumber || requestId}. Motivo: ${reason.trim()}`, 
+          'Solicitações',
+          currentRequestData,
+          { ...currentRequestData, status: 'rejected', rejectionReason: reason.trim() }
+        );
+      }
+
+      setSelectedRequestForApproval(null);
+      setRejectionReason('');
+      showToast("Solicitação rejeitada.", "info");
+    } catch (error) {
+      console.error("Error rejecting request:", error);
+      showToast("Erro ao rejeitar solicitação.", "error");
+    } finally {
+      setIsProcessingApproval(false);
+    }
   };
 
   const deactivateAnalyst = (id: string) => {
@@ -2501,6 +2532,9 @@ export default function App() {
                 getAnalystDisplayName={getAnalystDisplayName}
                 getAnalystEmail={getAnalystEmail}
                 getAnalystTrack={getAnalystTrack}
+                searchQuery={approvalSearchQuery}
+                setSearchQuery={setApprovalSearchQuery}
+                isProcessing={isProcessingApproval}
               />
             )}
             {activeTab === 'extract' && (
