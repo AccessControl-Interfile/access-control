@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { AlertCircle, Check, Edit2, PlusCircle, Trash2 } from 'lucide-react';
+import { AlertCircle, Check, Edit2, PlusCircle, Trash2, Search, Monitor } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { AccessRequest, FieldDefinition, System, Track } from '../../types';
 import { User as FirebaseUser } from 'firebase/auth';
@@ -45,13 +45,33 @@ export default function RequestTab({
   getAnalystDisplayName,
   handleDeleteRequest
 }: RequestTabProps) {
+  const [systemSearchQueries, setSystemSearchQueries] = React.useState<Record<string, string>>({});
+
+  const systemsByCompany = React.useMemo(() => {
+    const groups: Record<string, System[]> = {};
+    if (!Array.isArray(systems)) return groups;
+    
+    systems.forEach(system => {
+      if (!system || typeof system !== 'object') return;
+      const company = (system.empresa || 'Outros').toString();
+      if (!groups[company]) groups[company] = [];
+      groups[company].push(system);
+    });
+
+    const sortedGroups: Record<string, System[]> = {};
+    Object.keys(groups).sort().forEach(key => {
+      sortedGroups[key] = groups[key].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    });
+    return sortedGroups;
+  }, [systems]);
+
   return (
     <motion.div 
       key="request"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
-      className="max-w-4xl mx-auto space-y-6"
+      className="w-full space-y-6"
     >
       <div className="flex items-center justify-center">
         <div className="flex bg-slate-100 p-1 rounded-2xl">
@@ -77,7 +97,7 @@ export default function RequestTab({
       </div>
 
       {requestSubTab === 'new' ? (
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden max-w-2xl mx-auto">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden w-full">
           <div className="p-8 border-b border-slate-100">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">
               {editingRequest ? "Ajustar Solicitação" : "Solicitar Novo Analista"}
@@ -99,7 +119,8 @@ export default function RequestTab({
           </div>
           <div className="p-8">
             <form key={editingRequest?.id || 'new_request'} onSubmit={handleRequestAccess} className="space-y-6">
-              {analystFields.map(field => {
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {analystFields.map(field => {
                 const defaultValue = editingRequest?.analystData[field.id] || '';
                 
                 if (field.options && field.options.length > 0) {
@@ -220,46 +241,87 @@ export default function RequestTab({
                   </div>
                 );
               })}
+            </div>
 
-              <div className="pt-4 border-t border-slate-100">
+            <div className="pt-4 border-t border-slate-100 space-y-6">
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
                   Sistemas Necessários
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                  {systems.map(system => (
-                    <label 
-                      key={system.id} 
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer",
-                        selectedSystemsInForm.includes(system.id)
-                          ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                          : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50"
-                      )}
-                    >
-                      <input 
-                        type="checkbox"
-                        className="hidden"
-                        checked={selectedSystemsInForm.includes(system.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedSystemsInForm([...selectedSystemsInForm, system.id]);
-                          } else {
-                            setSelectedSystemsInForm(selectedSystemsInForm.filter(id => id !== system.id));
-                          }
-                        }}
-                      />
-                      <div className={cn(
-                        "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
-                        selectedSystemsInForm.includes(system.id)
-                          ? "bg-indigo-600 border-indigo-600 text-white"
-                          : "bg-white border-slate-300"
-                      )}>
-                        {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3" />}
+                
+                {(Object.entries(systemsByCompany) as [string, System[]][]).map(([company, companySystems]) => {
+                  const searchQuery = (systemSearchQueries[company] || '').toString();
+                  const filteredSystems = companySystems.filter(system => 
+                    (system.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (system.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+                  );
+
+                  return (
+                    <div key={company} className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-indigo-600">
+                            <Monitor className="w-4 h-4" />
+                          </div>
+                          <span className="text-sm font-bold text-slate-700">{company}</span>
+                        </div>
+                        <div className="relative w-full sm:w-64">
+                          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input 
+                            type="text" 
+                            placeholder={`Buscar em ${company}...`} 
+                            value={searchQuery}
+                            onChange={(e) => setSystemSearchQueries(prev => ({ ...prev, [company]: e.target.value }))}
+                            className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full"
+                          />
+                        </div>
                       </div>
-                      <span className="text-sm font-medium">{system.name}</span>
-                    </label>
-                  ))}
-                </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {filteredSystems.map(system => (
+                          <label 
+                            key={system.id} 
+                            className={cn(
+                              "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer",
+                              selectedSystemsInForm.includes(system.id)
+                                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                                : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50"
+                            )}
+                          >
+                            <input 
+                              type="checkbox"
+                              className="hidden"
+                              checked={selectedSystemsInForm.includes(system.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedSystemsInForm([...selectedSystemsInForm, system.id]);
+                                } else {
+                                  setSelectedSystemsInForm(selectedSystemsInForm.filter(id => id !== system.id));
+                                }
+                              }}
+                            />
+                            <div className={cn(
+                              "w-5 h-5 rounded-md border flex items-center justify-center transition-all shrink-0",
+                              selectedSystemsInForm.includes(system.id)
+                                ? "bg-indigo-600 border-indigo-600 text-white"
+                                : "bg-white border-slate-300"
+                            )}>
+                              {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3" />}
+                            </div>
+                            <div className="min-w-0">
+                              <span className="text-sm font-bold block truncate">{system.name}</span>
+                              <span className="text-xs opacity-70 block truncate">{system.description}</span>
+                            </div>
+                          </label>
+                        ))}
+                        {filteredSystems.length === 0 && (
+                          <div className="col-span-full text-center py-4 text-slate-400 text-xs italic">
+                            Nenhum sistema encontrado nesta empresa.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex gap-3 pt-6">

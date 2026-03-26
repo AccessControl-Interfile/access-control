@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Search, Check } from 'lucide-react';
+import { X, Search, Check, Monitor } from 'lucide-react';
 import { ref, set, update, remove } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { cn } from '../../lib/utils';
@@ -42,7 +42,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
   showToast,
 }) => {
   const [selectedSystemsInForm, setSelectedSystemsInForm] = useState<string[]>([]);
-  const [systemSearchQuery, setSystemSearchQuery] = useState('');
+  const [systemSearchQueries, setSystemSearchQueries] = useState<Record<string, string>>({});
 
   const [hasChanges, setHasChanges] = useState(false);
   const formRef = React.useRef<HTMLFormElement>(null);
@@ -120,6 +120,24 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
       checkChanges();
     }
   }, [selectedSystemsInForm]);
+
+  const systemsByCompany = React.useMemo(() => {
+    const groups: Record<string, System[]> = {};
+    if (!Array.isArray(systems)) return groups;
+    
+    systems.forEach(system => {
+      if (!system || typeof system !== 'object') return;
+      const company = (system.empresa || 'Outros').toString();
+      if (!groups[company]) groups[company] = [];
+      groups[company].push(system);
+    });
+
+    const sortedGroups: Record<string, System[]> = {};
+    Object.keys(groups).sort().forEach(key => {
+      sortedGroups[key] = groups[key].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    });
+    return sortedGroups;
+  }, [systems]);
 
   if (!isOpen) return null;
 
@@ -246,7 +264,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
 
     onClose();
     setSelectedSystemsInForm([]);
-    setSystemSearchQuery('');
+    setSystemSearchQueries({});
   };
 
   return (
@@ -265,7 +283,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
           <button 
             onClick={() => {
               onClose();
-              setSystemSearchQuery('');
+              setSystemSearchQueries({});
             }}
             className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
           >
@@ -390,68 +408,85 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
               </div>
             </div>
 
-            <div>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-2 mb-4">
-                <h3 className="text-sm font-bold text-slate-800">Sistemas Utilizados</h3>
-                <div className="relative w-full sm:w-64">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Buscar sistema..." 
-                    value={systemSearchQuery}
-                    onChange={(e) => setSystemSearchQuery(e.target.value)}
-                    className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                {systems
-                  .filter(system => system.name.toLowerCase().includes(systemSearchQuery.toLowerCase()))
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map(system => (
-                  <label 
-                    key={system.id} 
-                    className={cn(
-                      "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer",
-                      selectedSystemsInForm.includes(system.id)
-                        ? "bg-indigo-50 border-indigo-200 text-indigo-700"
-                        : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50",
-                      (!canManageAccess && !canManageAnalysts) && "opacity-50 cursor-not-allowed pointer-events-none"
-                    )}
-                  >
-                    <input 
-                      type="checkbox"
-                      className="hidden"
-                      checked={selectedSystemsInForm.includes(system.id)}
-                      disabled={!canManageAccess && !canManageAnalysts}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedSystemsInForm([...selectedSystemsInForm, system.id]);
-                        } else {
-                          setSelectedSystemsInForm(selectedSystemsInForm.filter(id => id !== system.id));
-                        }
-                      }}
-                    />
-                    <div className={cn(
-                      "w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0",
-                      selectedSystemsInForm.includes(system.id)
-                        ? "bg-indigo-600 border-indigo-600"
-                        : "border-slate-300 bg-white"
-                    )}>
-                      {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3 text-white" />}
+            <div className="space-y-6">
+              <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2 mb-4">Sistemas Utilizados</h3>
+              
+              {(Object.entries(systemsByCompany) as [string, System[]][]).map(([company, companySystems]) => {
+                const searchQuery = (systemSearchQueries[company] || '').toString();
+                const filteredSystems = companySystems.filter(system => 
+                  (system.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                  (system.description || '').toLowerCase().includes(searchQuery.toLowerCase())
+                );
+
+                return (
+                  <div key={company} className="space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50 p-3 rounded-2xl border border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-indigo-600">
+                          <Monitor className="w-4 h-4" />
+                        </div>
+                        <span className="text-sm font-bold text-slate-700">{company}</span>
+                      </div>
+                      <div className="relative w-full sm:w-64">
+                        <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input 
+                          type="text" 
+                          placeholder={`Buscar em ${company}...`} 
+                          value={searchQuery}
+                          onChange={(e) => setSystemSearchQueries(prev => ({ ...prev, [company]: e.target.value }))}
+                          className="pl-9 pr-4 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full"
+                        />
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <span className="text-sm font-bold block truncate">{system.name}</span>
-                      <span className="text-xs opacity-70 block truncate">{system.description}</span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {filteredSystems.map(system => (
+                        <label 
+                          key={system.id} 
+                          className={cn(
+                            "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer",
+                            selectedSystemsInForm.includes(system.id)
+                              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                              : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50",
+                            (!canManageAccess && !canManageAnalysts) && "opacity-50 cursor-not-allowed pointer-events-none"
+                          )}
+                        >
+                          <input 
+                            type="checkbox"
+                            className="hidden"
+                            checked={selectedSystemsInForm.includes(system.id)}
+                            disabled={!canManageAccess && !canManageAnalysts}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSystemsInForm([...selectedSystemsInForm, system.id]);
+                              } else {
+                                setSelectedSystemsInForm(selectedSystemsInForm.filter(id => id !== system.id));
+                              }
+                            }}
+                          />
+                          <div className={cn(
+                            "w-5 h-5 rounded border flex items-center justify-center transition-colors shrink-0",
+                            selectedSystemsInForm.includes(system.id)
+                              ? "bg-indigo-600 border-indigo-600"
+                              : "border-slate-300 bg-white"
+                          )}>
+                            {selectedSystemsInForm.includes(system.id) && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-sm font-bold block truncate">{system.name}</span>
+                            <span className="text-xs opacity-70 block truncate">{system.description}</span>
+                          </div>
+                        </label>
+                      ))}
+                      {filteredSystems.length === 0 && (
+                        <div className="col-span-full text-center py-4 text-slate-400 text-xs italic">
+                          Nenhum sistema encontrado nesta empresa.
+                        </div>
+                      )}
                     </div>
-                  </label>
-                ))}
-                {systems.filter(system => system.name.toLowerCase().includes(systemSearchQuery.toLowerCase())).length === 0 && (
-                  <div className="col-span-full text-center py-8 text-slate-400 text-sm">
-                    Nenhum sistema encontrado.
                   </div>
-                )}
-              </div>
+                );
+              })}
             </div>
             {editingAnalyst && (
               <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 mt-6">
@@ -479,7 +514,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
             type="button"
             onClick={() => {
               onClose();
-              setSystemSearchQuery('');
+              setSystemSearchQueries({});
             }}
             className="flex-1 px-4 py-3 bg-white text-slate-600 font-bold rounded-xl hover:bg-slate-100 transition-colors border border-slate-200"
           >

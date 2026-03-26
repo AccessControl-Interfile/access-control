@@ -372,6 +372,7 @@ export default function App() {
   };
 
   const [analystStatusFilter, setAnalystStatusFilter] = useState<'all' | 'active' | 'deactivated'>('active');
+  const [systemCompanyFilter, setSystemCompanyFilter] = useState<string>('all');
   const [analystAccessStatusFilter, setAnalystAccessStatusFilter] = useState<'all' | 'ok' | 'pending' | 'lost' | 'none'>('all');
   const [analystSupervisorFilter, setAnalystSupervisorFilter] = useState<string>('all');
   const [searchField, setSearchField] = useState<string>('all');
@@ -2490,6 +2491,8 @@ export default function App() {
                 setEditingSystem={setEditingSystem}
                 setIsAddingSystem={setIsAddingSystem}
                 deleteSystem={deleteSystem}
+                companyFilter={systemCompanyFilter}
+                setCompanyFilter={setSystemCompanyFilter}
               />
             )}
 

@@ -122,6 +122,27 @@ export const SystemModal: React.FC<SystemModalProps> = ({
                 );
               }
               // Fallback for custom fields
+              if (field.options && field.options.length > 0) {
+                return (
+                  <div key={field.id}>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                      {field.label}
+                    </label>
+                    <select 
+                      name={field.id} 
+                      defaultValue={editingSystem?.[field.id] || ''} 
+                      required 
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    >
+                      <option value="">Selecione uma opção...</option>
+                      {field.options.map(option => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+
               return (
                 <div key={field.id}>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
