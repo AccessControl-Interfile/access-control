@@ -63,6 +63,7 @@ import SystemsTab from './components/tabs/SystemsTab';
 import RequestTab from './components/tabs/RequestTab';
 import ApprovalsTab from './components/tabs/ApprovalsTab';
 import ExtractTab from './components/tabs/ExtractTab';
+import OrganogramaTab from './components/tabs/OrganogramaTab';
 import { AnalystModal } from './components/modals/AnalystModal';
 import { SystemModal } from './components/modals/SystemModal';
 import { FieldModal } from './components/modals/FieldModal';
@@ -262,6 +263,7 @@ export default function App() {
     if (path === 'Solicitacoes') return 'request';
     if (path === 'Aprovacoes') return 'approvals';
     if (path === 'Extracao') return 'extract';
+    if (path === 'Organograma') return 'organogram';
     if (path === 'Configuracoes') return 'settings';
     return 'dashboard';
   }, [location.pathname]);
@@ -275,6 +277,7 @@ export default function App() {
       'request': '/Solicitacoes',
       'approvals': '/Aprovacoes',
       'extract': '/Extracao',
+      'organogram': '/Organograma',
       'settings': '/Configuracoes'
     };
     navigate(paths[tab] || '/');
@@ -2624,6 +2627,25 @@ export default function App() {
               </motion.span>
             </button>
           )}
+
+          {(isSupervisor || currentUserData?.roleId === 'admin') && (
+            <button 
+              onClick={() => { setActiveTab('organogram'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+                activeTab === 'organogram' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
+              )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Organograma" : ""}
+            >
+              <Users className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Organograma
+              </motion.span>
+            </button>
+          )}
         </nav>
 
         <div className="p-4 border-t border-slate-100 overflow-hidden">
@@ -2713,6 +2735,7 @@ export default function App() {
               {activeTab === 'systems' && 'Sistemas'}
               {activeTab === 'request' && 'Solicitar Acesso'}
               {activeTab === 'approvals' && 'Aprovações Pendentes'}
+              {activeTab === 'organogram' && 'Organograma'}
               {activeTab === 'settings' && 'Configurações'}
               {activeTab === 'extract' && 'Extração de Dados'}
             </h1>
@@ -2981,6 +3004,16 @@ export default function App() {
                 logExportEndDate={logExportEndDate}
                 setLogExportEndDate={setLogExportEndDate}
                 analystFields={analystFields}
+              />
+            )}
+            {activeTab === 'organogram' && (
+              <OrganogramaTab 
+                key="organogram"
+                analysts={allAnalysts}
+                supervisors={mergedSupervisors}
+                getAnalystDisplayName={getAnalystDisplayName}
+                getAnalystEmail={getAnalystEmail}
+                getAnalystInitials={getAnalystInitials}
               />
             )}
             {activeTab === 'settings' && (
