@@ -13,12 +13,15 @@ interface NotificationModalProps {
   onReject: (requestId: string, reason: string) => Promise<void>;
   onViewMyRequests: () => void;
   onViewApprovals: () => void;
+  onAdjustRequest: (request: AccessRequest) => void;
   systems: System[];
   analystFields: FieldDefinition[];
   getAnalystInitials: (analyst: any) => string;
   getAnalystDisplayName: (analyst: any) => string;
   getAnalystEmail: (analyst: any) => string;
   getAnalystTrack: (analyst: any) => string;
+  canApprove: boolean;
+  currentUserUid?: string;
 }
 
 export default function NotificationModal({
@@ -30,12 +33,15 @@ export default function NotificationModal({
   onReject,
   onViewMyRequests,
   onViewApprovals,
+  onAdjustRequest,
   systems,
   analystFields,
   getAnalystInitials,
   getAnalystDisplayName,
   getAnalystEmail,
-  getAnalystTrack
+  getAnalystTrack,
+  canApprove,
+  currentUserUid
 }: NotificationModalProps) {
   const [rejectReasons, setRejectReasons] = React.useState<Record<string, string>>({});
   const [selectedNotificationId, setSelectedNotificationId] = React.useState<string | null>(null);
@@ -44,6 +50,7 @@ export default function NotificationModal({
 
   const selectedNotification = notifications.find(n => n.id === selectedNotificationId);
   const selectedRequest = selectedNotification ? requests.find(r => r.id === selectedNotification.requestId) : null;
+  const isSolicitor = selectedRequest && currentUserUid && selectedRequest.requestedBy === currentUserUid;
 
   return (
     <AnimatePresence>
@@ -233,48 +240,95 @@ export default function NotificationModal({
                       <span className="text-[10px] font-medium text-slate-400">{new Date(selectedRequest.requestedAt).toLocaleString('pt-BR')}</span>
                     </div>
                   </div>
-
                   {selectedRequest.status === 'pending' && (
                     <div className="space-y-6 pt-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                          Motivo da Rejeição (Obrigatório para reprovar)
-                        </label>
-                        <textarea 
-                          value={rejectReasons[selectedNotificationId!] || ''}
-                          onChange={(e) => setRejectReasons(prev => ({ ...prev, [selectedNotificationId!]: e.target.value }))}
-                          className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm min-h-[120px] resize-none"
-                          placeholder="Explique detalhadamente o motivo da reprovação..."
-                        />
-                      </div>
-                      
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <button 
-                          onClick={() => {
-                            const reason = rejectReasons[selectedNotificationId!] || '';
-                            if (!reason.trim()) return;
-                            onReject(selectedRequest.id, reason);
-                            setSelectedNotificationId(null);
-                          }}
-                          disabled={!(rejectReasons[selectedNotificationId!] || '').trim()}
-                          className="flex-1 px-8 py-5 bg-white text-rose-600 border-2 border-rose-100 font-bold rounded-2xl hover:bg-rose-50 hover:border-rose-200 transition-all shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:grayscale"
-                        >
-                          Reprovar Solicitação
-                        </button>
-                        <button 
-                          onClick={() => {
-                            onApprove(selectedRequest);
-                            setSelectedNotificationId(null);
-                          }}
-                          className="flex-1 px-8 py-5 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-[0.98]"
-                        >
-                          Aprovar Registro
-                        </button>
-                      </div>
+                      {canApprove ? (
+                        <>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+                              Motivo da Rejeição (Obrigatório para reprovar)
+                            </label>
+                            <textarea 
+                              value={rejectReasons[selectedNotificationId!] || ''}
+                              onChange={(e) => setRejectReasons(prev => ({ ...prev, [selectedNotificationId!]: e.target.value }))}
+                              className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all text-sm min-h-[120px] resize-none"
+                              placeholder="Explique detalhadamente o motivo da reprovação..."
+                            />
+                          </div>
+                          
+                          <div className="flex flex-col sm:flex-row gap-4">
+                            <button 
+                              onClick={() => {
+                                const reason = rejectReasons[selectedNotificationId!] || '';
+                                if (!reason.trim()) return;
+                                onReject(selectedRequest.id, reason);
+                                setSelectedNotificationId(null);
+                              }}
+                              disabled={!(rejectReasons[selectedNotificationId!] || '').trim()}
+                              className="flex-1 px-8 py-5 bg-white text-rose-600 border-2 border-rose-100 font-bold rounded-2xl hover:bg-rose-50 hover:border-rose-200 transition-all shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:grayscale"
+                            >
+                              Reprovar Solicitação
+                            </button>
+                            <button 
+                              onClick={() => {
+                                onApprove(selectedRequest);
+                                setSelectedNotificationId(null);
+                              }}
+                              className="flex-1 px-8 py-5 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-[0.98]"
+                            >
+                              Aprovar Registro
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
+                          <p className="text-sm font-medium text-amber-700 text-center flex items-center justify-center gap-2">
+                            <AlertCircle className="w-4 h-4" />
+                            Aguardando aprovação de um supervisor
+                          </p>
+                          <button 
+                            onClick={() => setSelectedNotificationId(null)}
+                            className="w-full mt-4 px-8 py-4 bg-white text-slate-600 font-bold rounded-xl border border-slate-200 hover:bg-slate-50 transition-all"
+                          >
+                            Voltar para a Lista
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {selectedRequest.status !== 'pending' && (
+                  {selectedRequest.status === 'rejected' && (
+                    <div className="space-y-6 pt-4">
+                      {selectedRequest.rejectionReason && (
+                        <div className="p-6 bg-rose-50 border border-rose-100 rounded-2xl">
+                          <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mb-1">Motivo da Rejeição</p>
+                          <p className="text-sm text-rose-700 font-medium whitespace-pre-wrap">{selectedRequest.rejectionReason}</p>
+                        </div>
+                      )}
+                      
+                      {isSolicitor && (
+                        <button 
+                          onClick={() => {
+                            onAdjustRequest(selectedRequest);
+                            setSelectedNotificationId(null);
+                          }}
+                          className="w-full px-8 py-5 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-[0.98] flex items-center justify-center gap-3"
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                          Ajustar e Reenviar Solicitação
+                        </button>
+                      )}
+
+                      <button 
+                        onClick={() => setSelectedNotificationId(null)}
+                        className="w-full px-8 py-5 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all"
+                      >
+                        Voltar para a Lista
+                      </button>
+                    </div>
+                  )}
+
+                  {selectedRequest.status === 'approved' && (
                     <div className="pt-4">
                       <button 
                         onClick={() => setSelectedNotificationId(null)}
@@ -343,12 +397,14 @@ export default function NotificationModal({
           {/* Footer */}
           {!selectedNotificationId && (
             <div className="p-8 border-t border-slate-100 bg-white flex justify-end gap-3">
-              <button 
-                onClick={onViewApprovals}
-                className="px-8 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all font-sans"
-              >
-                Ir para Aprovações
-              </button>
+              {canApprove && (
+                <button 
+                  onClick={onViewApprovals}
+                  className="px-8 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all font-sans"
+                >
+                  Ir para Aprovações
+                </button>
+              )}
               <button 
                 onClick={onClose}
                 className="px-12 py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-slate-200 text-lg"

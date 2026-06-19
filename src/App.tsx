@@ -382,7 +382,10 @@ export default function App() {
 
     if (isInitialLoadRef.current) {
       // First time loading requests, don't notify but populate the set
-      requests.forEach(req => notifiedRequestIdsRef.current.add(req.id + req.status));
+      requests.forEach(req => {
+        const key = req.id + req.status + (req.updatedAt || '');
+        notifiedRequestIdsRef.current.add(key);
+      });
       prevRequestsRef.current = requests;
       isInitialLoadRef.current = false;
       return;
@@ -397,7 +400,7 @@ export default function App() {
     const hasApprovePermission = permissions.includes('approve_access');
 
     requests.forEach(req => {
-      const notificationKey = req.id + req.status;
+      const notificationKey = req.id + req.status + (req.updatedAt || '');
       if (notifiedRequestIdsRef.current.has(notificationKey)) return;
 
       const metadata = {
@@ -405,10 +408,13 @@ export default function App() {
         body: ''
       };
 
-      // New Pending Request (Notify Admins/Approvers)
+      // New or Updated Pending Request (Notify Admins/Approvers)
       if (req.status === 'pending' && hasApprovePermission) {
-        metadata.title = 'Nova Solicitação';
-        metadata.body = `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`;
+        const isUpdate = req.updatedAt && req.updatedAt !== req.requestedAt;
+        metadata.title = isUpdate ? 'Solicitação Atualizada' : 'Nova Solicitação';
+        metadata.body = isUpdate 
+          ? `A solicitação ${req.requestNumber} foi ajustada por ${req.requestedByName} e requer nova análise.`
+          : `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`;
       }
 
       // Action on Request (Notify Requester OR Admin)
@@ -420,7 +426,7 @@ export default function App() {
       if (metadata.title) {
         sendNotification();
         
-        // Add to in-app notifications
+        // Add to in-app notifications - replace existing one for same request if it exists
         const newNotification: AppNotification = {
           id: Math.random().toString(36).substring(2),
           title: metadata.title,
@@ -430,7 +436,11 @@ export default function App() {
           timestamp: Date.now()
         };
         
-        setAppNotifications(prev => [newNotification, ...prev]);
+        setAppNotifications(prev => {
+          // Remove any existing notification for this request to avoid duplicates
+          const filtered = prev.filter(n => n.requestId !== req.id);
+          return [newNotification, ...filtered];
+        });
         setIsNotificationModalOpen(true);
       }
 
@@ -446,12 +456,27 @@ export default function App() {
   // Sync notifications with request statuses
   useEffect(() => {
     setAppNotifications(prev => prev.filter(notification => {
-      if (notification.type === 'request_pending') {
-        const request = requests.find(r => r.id === notification.requestId);
-        // If the request is no longer pending, remove this notification
-        return request && request.status === 'pending';
+      const request = requests.find(r => r.id === notification.requestId);
+      // If the request no longer exists, remove its notification
+      if (!request) return false;
+
+      // Handle specific notification types
+      switch (notification.type) {
+        case 'request_pending':
+          // Approver notification: only show if still pending
+          return request.status === 'pending';
+        
+        case 'request_approved':
+          // Solicitor notification: only show if still approved
+          return request.status === 'approved';
+        
+        case 'request_rejected':
+          // Solicitor notification: only show if still rejected
+          return request.status === 'rejected';
+        
+        default:
+          return true;
       }
-      return true;
     }));
   }, [requests]);
 
@@ -1080,8 +1105,10 @@ export default function App() {
         systemIds: selectedSystemsInForm,
         status: 'pending',
         requestedBy: user?.uid || '',
+        requestedByEmail: user?.email || '',
         requestedByName: currentUserData?.name || user?.email || 'Desconhecido',
-        requestedAt
+        requestedAt,
+        updatedAt: new Date().toISOString()
       };
 
       // Ensure no undefined values are sent to Firebase
@@ -1165,7 +1192,8 @@ export default function App() {
           status: 'approved',
           approvedBy: user?.uid || '',
           approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
-          approvedAt: new Date().toISOString()
+          approvedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         });
 
         if (user?.email) {
@@ -1202,7 +1230,8 @@ export default function App() {
           status: 'approved',
           approvedBy: user?.uid || '',
           approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
-          approvedAt: new Date().toISOString()
+          approvedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         });
 
         if (user?.email) {
@@ -1258,7 +1287,8 @@ export default function App() {
         status: 'approved',
         approvedBy: user?.uid || '',
         approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
-        approvedAt: new Date().toISOString()
+        approvedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       });
 
       if (user?.email) {
@@ -1309,6 +1339,7 @@ export default function App() {
         approvedBy: user?.uid || '',
         approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
         approvedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         rejectionReason: reason.trim()
       });
 
@@ -2311,11 +2342,15 @@ export default function App() {
   const canManageAccess = hasPermission('analysts_access_status');
   const canViewAnalysts = canManageAnalysts || canManageAccess;
   const canManageSystems = hasPermission('systems_manage');
+  const isSupervisor = currentUserData?.roleId === 'supervisor' || roles.find(r => r.id === currentUserData?.roleId)?.name.toLowerCase() === 'supervisor';
+
   const canViewSettings = hasPermission('settings_analyst_fields') || 
                           hasPermission('settings_system_fields') || 
                           hasPermission('settings_tracks') ||
+                          hasPermission('settings_supervisors') ||
                           hasPermission('settings_users') ||
-                          hasPermission('settings_roles');
+                          hasPermission('settings_roles') ||
+                          isSupervisor;
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 overflow-x-hidden">
@@ -3122,12 +3157,21 @@ export default function App() {
             setActiveTab('approvals');
             setIsNotificationModalOpen(false);
           }}
+          onAdjustRequest={(request) => {
+            setEditingRequest(request);
+            setSelectedSystemsInForm(request.systemIds || []);
+            setRequestSubTab('new');
+            setActiveTab('request');
+            setIsNotificationModalOpen(false);
+          }}
           systems={systems}
           analystFields={analystFields}
           getAnalystInitials={getAnalystInitials}
           getAnalystDisplayName={getAnalystDisplayName}
           getAnalystEmail={getAnalystEmail}
           getAnalystTrack={getAnalystTrack}
+          canApprove={hasPermission('approve_access')}
+          currentUserUid={user?.uid || ''}
         />
 
         <Toast 

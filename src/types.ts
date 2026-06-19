@@ -118,8 +118,10 @@ export interface AccessRequest {
   };
   status: 'pending' | 'approved' | 'rejected';
   requestedBy: string;
+  requestedByEmail?: string;
   requestedByName: string;
   requestedAt: string;
+  updatedAt?: string;
   approvedBy?: string;
   approvedByName?: string;
   approvedAt?: string;
