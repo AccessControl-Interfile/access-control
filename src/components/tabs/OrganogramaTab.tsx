@@ -112,6 +112,10 @@ export default function OrganogramaTab({
       // Wait for re-render
       await new Promise(resolve => setTimeout(resolve, 600));
 
+      const bounds = exportRef.current.getBoundingClientRect();
+      const exportWidth = Math.max(exportRef.current.scrollWidth, bounds.width);
+      const exportHeight = Math.max(exportRef.current.scrollHeight, bounds.height);
+
       const blob = await toPng(exportRef.current, {
         backgroundColor: document.documentElement.classList.contains('dark') ? '#0f172a' : '#f8fafc',
         style: {
@@ -120,10 +124,13 @@ export default function OrganogramaTab({
           padding: '80px', // Extra margin for the image
           display: 'flex',
           justifyContent: 'center',
-          alignItems: 'center'
+          alignItems: 'center',
+          width: `${exportWidth}px`,
+          height: `${exportHeight}px`
         },
-        width: exportRef.current.scrollWidth + 160,
-        height: exportRef.current.scrollHeight + 160,
+        width: exportWidth + 160,
+        height: exportHeight + 160,
+        pixelRatio: 2
       });
       
       const response = await fetch(blob);
@@ -150,46 +157,63 @@ export default function OrganogramaTab({
     }
   };
 
-  const copyToExcel = () => {
+  const copyToExcel = async () => {
     if (!tree) return;
     setCopyStatus('copying-excel');
 
-    // Build TSV (Tab Separated Values) for Excel compatibility
-    const headers = ['Nível', 'Nome', 'Esteira', 'Email'];
-    const rows = [];
+    // Build TSV (Tab Separated Values) and HTML table
+    const headers = ['Esteira', 'Nome', 'Email'];
+    const rowData: string[][] = [];
     
-    // Header Row
-    rows.push(headers.join('\t'));
-
     // Root Row
-    rows.push([
-        'Superior',
-        tree.name,
+    rowData.push([
         tree.track || '',
+        tree.name,
         tree.analystData ? getAnalystEmail(tree.analystData) : ''
-    ].join('\t'));
+    ]);
 
     // Children Rows
     tree.children.forEach(child => {
-        rows.push([
-            'Subordinado',
-            child.name,
+        rowData.push([
             child.track || '',
+            child.name,
             child.analystData ? getAnalystEmail(child.analystData) : ''
-        ].join('\t'));
+        ]);
     });
 
-    const tsvContent = rows.join('\n');
+    const tsvContent = [headers.join('\t'), ...rowData.map(r => r.join('\t'))].join('\n');
     
-    navigator.clipboard.writeText(tsvContent)
-      .then(() => {
-        setCopyStatus('copied-excel');
-        setTimeout(() => setCopyStatus('idle'), 3000);
-      })
-      .catch(err => {
-        console.error('Erro ao copiar dados:', err);
-        setCopyStatus('idle');
-      });
+    let htmlContent = '<table><thead><tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+    rowData.forEach(r => {
+        htmlContent += '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>';
+    });
+    htmlContent += '</tbody></table>';
+    
+    try {
+      const typeText = "text/plain";
+      const typeHtml = "text/html";
+      const blobText = new Blob([tsvContent], { type: typeText });
+      const blobHtml = new Blob([htmlContent], { type: typeHtml });
+      
+      await navigator.clipboard.write([
+        new ClipboardItem({ 
+          [typeText]: blobText,
+          [typeHtml]: blobHtml
+        })
+      ]);
+      setCopyStatus('copied-excel');
+      setTimeout(() => setCopyStatus('idle'), 3000);
+    } catch (err) {
+      console.error('Erro ao copiar dados via ClipboardItem, tentando fallback:', err);
+      navigator.clipboard.writeText(tsvContent)
+        .then(() => {
+          setCopyStatus('copied-excel');
+          setTimeout(() => setCopyStatus('idle'), 3000);
+        })
+        .catch(() => {
+          setCopyStatus('idle');
+        });
+    }
   };
 
   const navigateToNode = (nodeName: string) => {
