@@ -435,6 +435,14 @@ export default function App() {
   useEffect(() => {
     if (!user || requests.length === 0) return;
 
+    const currentUserData = users.find(u => u.id === user?.uid);
+    const userRole = roles.find(r => r.id === currentUserData?.roleId);
+    const permissions = [...(userRole?.permissions || []), ...(currentUserData?.permissions || [])];
+    if (currentUserData?.roleId === 'admin') {
+      permissions.push('approve_access'); // Ensure admin has implicit perm
+    }
+    const hasApprovePermission = permissions.includes('approve_access');
+
     if (isInitialLoadRef.current) {
       // First time loading requests, don't notify but populate the set
       let initialNotifications: AppNotification[] = [];
@@ -481,14 +489,6 @@ export default function App() {
       }
       return;
     }
-
-    const currentUserData = users.find(u => u.id === user?.uid);
-    const userRole = roles.find(r => r.id === currentUserData?.roleId);
-    const permissions = [...(userRole?.permissions || []), ...(currentUserData?.permissions || [])];
-    if (currentUserData?.roleId === 'admin') {
-      permissions.push('approve_access'); // Ensure admin has implicit perm
-    }
-    const hasApprovePermission = permissions.includes('approve_access');
 
     requests.forEach(req => {
       const notificationKey = req.id + req.status + (req.updatedAt || '');

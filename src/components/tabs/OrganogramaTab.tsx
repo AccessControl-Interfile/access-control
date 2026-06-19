@@ -234,7 +234,7 @@ export default function OrganogramaTab({
     return () => canvas.removeEventListener('wheel', onWheelNative);
   }, []);
 
-  const OrgNode = ({ node, isRoot = false }: { node: HierarchyNode; isRoot?: boolean }) => {
+  function OrgNode({ node, isRoot = false }: { node: HierarchyNode; isRoot?: boolean }) {
     // Check subordinates globally since children list in node is now only direct
     const actualSubordinates = useMemo(() => {
         return analysts.filter(a => (a.supervisor || '').trim().toLowerCase() === node.name.toLowerCase());
@@ -338,7 +338,7 @@ export default function OrganogramaTab({
         )}
       </div>
     );
-  };
+  }
 
   return (
     <motion.div 
