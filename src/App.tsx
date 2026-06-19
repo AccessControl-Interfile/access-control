@@ -398,6 +398,21 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarPinned, setIsSidebarPinned] = useState(() => localStorage.getItem('sidebarPinned') === 'true');
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
+  const sidebarHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleSidebarMouseEnter = () => {
+    sidebarHoverTimeoutRef.current = setTimeout(() => {
+      setIsSidebarHovered(true);
+    }, 1000);
+  };
+
+  const handleSidebarMouseLeave = () => {
+    if (sidebarHoverTimeoutRef.current) {
+      clearTimeout(sidebarHoverTimeoutRef.current);
+      sidebarHoverTimeoutRef.current = null;
+    }
+    setIsSidebarHovered(false);
+  };
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -2442,8 +2457,8 @@ export default function App() {
 
               {/* Sidebar */}
               <aside 
-                onMouseEnter={() => setIsSidebarHovered(true)}
-                onMouseLeave={() => setIsSidebarHovered(false)}
+                onMouseEnter={handleSidebarMouseEnter}
+                onMouseLeave={handleSidebarMouseLeave}
                 className={cn(
                   "fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 flex flex-col transition-all duration-300 lg:static lg:h-screen",
                   isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
