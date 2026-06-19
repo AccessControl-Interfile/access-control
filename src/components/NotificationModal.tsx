@@ -377,9 +377,11 @@ export default function NotificationModal({
                           <h3 className="font-bold text-slate-800 text-xl leading-tight group-hover:text-indigo-600 transition-colors">
                             {notification.title}
                           </h3>
-                          <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg">
-                            {new Date(notification.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-lg">
+                              {new Date(notification.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-slate-600 line-clamp-1">{notification.body}</p>
                       </div>

@@ -382,12 +382,48 @@ export default function App() {
 
     if (isInitialLoadRef.current) {
       // First time loading requests, don't notify but populate the set
+      let initialNotifications: AppNotification[] = [];
       requests.forEach(req => {
         const key = req.id + req.status + (req.updatedAt || '');
         notifiedRequestIdsRef.current.add(key);
+        
+        // Check if we should exhibit this as a notification on start
+        let shouldNotify = false;
+        let title = '';
+        let body = '';
+        
+        if (req.status === 'pending' && hasApprovePermission) {
+          shouldNotify = true;
+          const isUpdate = req.updatedAt && req.updatedAt !== req.requestedAt;
+          title = isUpdate ? 'Solicitação Atualizada' : 'Nova Solicitação';
+          body = isUpdate 
+            ? `A solicitação ${req.requestNumber} foi ajustada por ${req.requestedByName}.`
+            : `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`;
+        } else if (req.status !== 'pending' && req.requestedBy === user?.uid) {
+          shouldNotify = true;
+          title = req.status === 'approved' ? 'Solicitação Aprovada' : 'Solicitação Reprovada';
+          body = `Sua solicitação ${req.requestNumber} foi ${req.status === 'approved' ? 'aprovada' : 'reprovada'}.`;
+        }
+
+        if (shouldNotify) {
+          initialNotifications.push({
+            id: Math.random().toString(36).substring(2),
+            title,
+            body,
+            type: req.status === 'pending' ? 'request_pending' : (req.status === 'approved' ? 'request_approved' : 'request_rejected'),
+            requestId: req.id,
+            timestamp: req.updatedAt ? new Date(req.updatedAt).getTime() : Date.now()
+          });
+        }
       });
+      
       prevRequestsRef.current = requests;
       isInitialLoadRef.current = false;
+      
+      if (initialNotifications.length > 0) {
+        setAppNotifications(initialNotifications.sort((a, b) => b.timestamp - a.timestamp));
+        setIsNotificationModalOpen(true);
+      }
       return;
     }
 
