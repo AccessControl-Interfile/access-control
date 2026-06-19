@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
-import { Users, Monitor, ShieldCheck, Search, Plus, Check, Move, Edit2, Trash2, Key, GripVertical, UserCheck } from 'lucide-react';
+import { Users, Monitor, ShieldCheck, Search, Plus, Check, Move, Edit2, Trash2, Key, GripVertical, UserCheck, Bell } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { FieldDefinition, Track, User, Role, PERMISSIONS_LABELS, Permission, Supervisor } from '../../types';
 import { ref, set } from 'firebase/database';
@@ -119,6 +119,9 @@ interface SettingsTabProps {
   setIsAddingRole: (value: boolean) => void;
   setEditingRole: (role: Role) => void;
   deleteRole: (role: Role) => void;
+  onPlayNotification: () => void;
+  updateUserNotificationSound: (soundId: string) => void;
+  currentUserId: string | undefined;
 }
 
 export default function SettingsTab({
@@ -156,8 +159,21 @@ export default function SettingsTab({
   roles,
   setIsAddingRole,
   setEditingRole,
-  deleteRole
+  deleteRole,
+  onPlayNotification,
+  updateUserNotificationSound,
+  currentUserId
 }: SettingsTabProps) {
+  const currentUser = users.find(u => u.id === currentUserId);
+  const currentSoundId = currentUser?.notificationSound || 'chime';
+
+  const NOTIFICATION_SOUNDS = [
+    { id: 'chime', name: 'Sino Clássico' },
+    { id: 'success', name: 'Sucesso Moderno' },
+    { id: 'alert', name: 'Alerta de Sistema' },
+    { id: 'soft', name: 'Suave Zen' },
+    { id: 'techno', name: 'Digital Brisk' }
+  ];
   return (
     <motion.div 
       key="settings"
@@ -597,6 +613,53 @@ export default function SettingsTab({
             </div>
         </div>
       )}
+
+      {/* Notification Sound Section */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
+            <div>
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                <Bell className="w-6 h-6 text-indigo-600" />
+                Personalização de Som
+              </h3>
+              <p className="text-sm text-slate-500">Escolha o som das notificações que deseja ouvir no sistema.</p>
+            </div>
+            <button 
+              onClick={onPlayNotification}
+              className="w-full sm:w-auto px-6 py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 flex items-center justify-center gap-2 group"
+            >
+              <Bell className="w-5 h-5 group-hover:animate-bounce" />
+              Testar Som Atual
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {NOTIFICATION_SOUNDS.map(sound => (
+              <button
+                key={sound.id}
+                onClick={() => updateUserNotificationSound(sound.id)}
+                className={cn(
+                  "p-4 rounded-2xl border-2 transition-all text-left flex flex-col gap-2",
+                  currentSoundId === sound.id
+                    ? "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-md shadow-indigo-50"
+                    : "bg-white border-slate-100 text-slate-500 hover:border-slate-200"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div className={cn(
+                    "w-8 h-8 rounded-lg flex items-center justify-center",
+                    currentSoundId === sound.id ? "bg-indigo-500 text-white" : "bg-slate-100 text-slate-400"
+                  )}>
+                    <Check className={cn("w-4 h-4", currentSoundId === sound.id ? "opacity-100" : "opacity-0")} />
+                  </div>
+                </div>
+                <span className="text-sm font-bold">{sound.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
     </motion.div>
   );
 }

@@ -76,6 +76,8 @@ import Login from './components/Login';
 import ChangePassword from './components/ChangePassword';
 import Footer from './components/Footer';
 import Toast, { ToastType } from './components/Toast';
+import { AppNotification } from './types';
+import NotificationModal from './components/NotificationModal';
 
 // Mock Initial Data
 const INITIAL_ANALYST_FIELDS: FieldDefinition[] = [
@@ -257,6 +259,8 @@ export default function App() {
   const [systemFields, setSystemFields] = useState<FieldDefinition[]>(INITIAL_SYSTEM_FIELDS);
   const [accesses, setAccesses] = useState<Access[]>([]);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
+  const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const prevRequestsRef = useRef<AccessRequest[]>([]);
   const isInitialLoadRef = useRef(true);
 
@@ -380,7 +384,7 @@ export default function App() {
       // First time loading requests, don't notify but populate the set
       requests.forEach(req => notifiedRequestIdsRef.current.add(req.id + req.status));
       prevRequestsRef.current = requests;
-      // Note: isInitialLoadRef.current is set to false in the Firebase sync listener
+      isInitialLoadRef.current = false;
       return;
     }
 
@@ -396,43 +400,129 @@ export default function App() {
       const notificationKey = req.id + req.status;
       if (notifiedRequestIdsRef.current.has(notificationKey)) return;
 
+      const metadata = {
+        title: '',
+        body: ''
+      };
+
       // New Pending Request (Notify Admins/Approvers)
       if (req.status === 'pending' && hasApprovePermission) {
-        // Only notify if NOT the one who requested it (optional, but good)
-        if (req.requestedBy !== user.uid) {
-          sendNotification('Nova Solicitação', `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`);
-        }
+        metadata.title = 'Nova Solicitação';
+        metadata.body = `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`;
       }
 
-      // Rejected Request (Notify Requester)
-      if (req.status === 'rejected' && req.requestedBy === user.uid) {
-        sendNotification('Solicitação Reprovada', `Sua solicitação ${req.requestNumber} foi reprovada.`);
+      // Action on Request (Notify Requester OR Admin)
+      if ((req.status === 'rejected' || req.status === 'approved') && (req.requestedBy === user.uid || hasApprovePermission)) {
+        metadata.title = req.status === 'approved' ? 'Solicitação Aprovada' : 'Solicitação Reprovada';
+        metadata.body = `A solicitação ${req.requestNumber} foi ${req.status === 'approved' ? 'aprovada' : 'reprovada'}.`;
       }
 
-      // Approved Request (Notify Requester)
-      if (req.status === 'approved' && req.requestedBy === user.uid) {
-        sendNotification('Solicitação Aprovada', `Sua solicitação ${req.requestNumber} foi aprovada!`);
+      if (metadata.title) {
+        sendNotification();
+        
+        // Add to in-app notifications
+        const newNotification: AppNotification = {
+          id: Math.random().toString(36).substring(2),
+          title: metadata.title,
+          body: metadata.body,
+          requestId: req.id,
+          type: req.status === 'pending' ? 'request_pending' : (req.status === 'approved' ? 'request_approved' : 'request_rejected'),
+          timestamp: Date.now()
+        };
+        
+        setAppNotifications(prev => [newNotification, ...prev]);
+        setIsNotificationModalOpen(true);
       }
 
       notifiedRequestIdsRef.current.add(notificationKey);
     });
 
     prevRequestsRef.current = requests;
-    isInitialLoadRef.current = false;
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+    }
   }, [requests, user, users, roles]);
 
-  const sendNotification = (title: string, body: string) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/favicon.ico' });
+  // Sync notifications with request statuses
+  useEffect(() => {
+    setAppNotifications(prev => prev.filter(notification => {
+      if (notification.type === 'request_pending') {
+        const request = requests.find(r => r.id === notification.requestId);
+        // If the request is no longer pending, remove this notification
+        return request && request.status === 'pending';
+      }
+      return true;
+    }));
+  }, [requests]);
+
+  const playSystemSound = async (soundId: string) => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      const audioContext = new AudioContextClass();
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      const playTone = (frequency: number, startTime: number, duration: number, volume: number, type: OscillatorType = 'sine') => {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, startTime);
+
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(volume, startTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+      };
+
+      const now = audioContext.currentTime;
+
+      switch (soundId) {
+        case 'success':
+          playTone(523.25, now, 0.2, 0.1);
+          playTone(659.25, now + 0.1, 0.2, 0.1);
+          playTone(783.99, now + 0.2, 0.4, 0.1);
+          break;
+        case 'alert':
+          playTone(880, now, 0.1, 0.1, 'square');
+          playTone(880, now + 0.15, 0.1, 0.1, 'square');
+          playTone(440, now + 0.3, 0.4, 0.08);
+          break;
+        case 'soft':
+          playTone(329.63, now, 0.8, 0.1);
+          playTone(493.88, now + 0.2, 0.8, 0.05);
+          break;
+        case 'techno':
+          playTone(1046.50, now, 0.05, 0.1, 'triangle');
+          playTone(1318.51, now + 0.05, 0.05, 0.1, 'triangle');
+          playTone(1567.98, now + 0.1, 0.1, 0.1, 'triangle');
+          break;
+        case 'chime':
+        default:
+          playTone(659.25, now, 0.4, 0.1);
+          playTone(987.77, now + 0.12, 0.5, 0.08);
+          break;
+      }
+    } catch (error) {
+      console.warn("Som de notificação bloqueado:", error);
     }
   };
 
-  // Request Notification Permission
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
+  const sendNotification = () => {
+    const currentUserData = users.find(u => u.id === user?.uid);
+    const soundId = currentUserData?.notificationSound || 'chime';
+    playSystemSound(soundId);
+  };
+
+  // No physical audio file needed as we generate the chime via Web Audio API
 
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type, isVisible: true });
@@ -1556,6 +1646,17 @@ export default function App() {
               }
           }
       });
+  };
+
+  const updateUserNotificationSound = async (soundId: string) => {
+    if (!user) return;
+    try {
+      await set(ref(db, `users/${user.uid}/notificationSound`), soundId);
+      playSystemSound(soundId);
+      showToast("Preferência de som atualizada!", "success");
+    } catch (err: any) {
+      showToast("Erro ao atualizar som: " + err.message, "error");
+    }
   };
 
   const resetUserPassword = (id: string) => {
@@ -2705,6 +2806,9 @@ export default function App() {
                 setIsAddingRole={setIsAddingRole}
                 setEditingRole={setEditingRole}
                 deleteRole={deleteRole}
+                onPlayNotification={sendNotification}
+                updateUserNotificationSound={updateUserNotificationSound}
+                currentUserId={user?.uid}
               />
             )}
           </AnimatePresence>
@@ -2995,6 +3099,37 @@ export default function App() {
           onConfirm={confirmDeleteRequest}
           onClose={() => setDeleteRequestModal({ isOpen: false, request: null })}
         />
+
+        {/* In-App Notification Modal */}
+        <NotificationModal 
+          isOpen={isNotificationModalOpen}
+          onClose={() => setIsNotificationModalOpen(false)}
+          notifications={appNotifications}
+          requests={requests}
+          onApprove={async (request) => {
+            await handleApproveRequest(request);
+            setAppNotifications(prev => prev.filter(n => n.requestId !== request.id));
+          }}
+          onReject={async (requestId, reason) => {
+            await handleRejectRequest(requestId, reason);
+            setAppNotifications(prev => prev.filter(n => n.requestId !== requestId));
+          }}
+          onViewMyRequests={() => {
+            setActiveTab('request');
+            setIsNotificationModalOpen(false);
+          }}
+          onViewApprovals={() => {
+            setActiveTab('approvals');
+            setIsNotificationModalOpen(false);
+          }}
+          systems={systems}
+          analystFields={analystFields}
+          getAnalystInitials={getAnalystInitials}
+          getAnalystDisplayName={getAnalystDisplayName}
+          getAnalystEmail={getAnalystEmail}
+          getAnalystTrack={getAnalystTrack}
+        />
+
         <Toast 
           isVisible={toast.isVisible} 
           message={toast.message} 

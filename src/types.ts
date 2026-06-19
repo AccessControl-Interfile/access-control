@@ -45,6 +45,16 @@ export interface User {
   roleId?: string;
   permissions: Permission[];
   mustChangePassword?: boolean;
+  notificationSound?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  body: string;
+  requestId?: string;
+  type: 'request_pending' | 'request_approved' | 'request_rejected';
+  timestamp: number;
 }
 
 export interface System {
