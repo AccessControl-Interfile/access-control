@@ -324,7 +324,7 @@ export default function OrganogramaTab({
             <div className="flex flex-col gap-0">
               {childrenRows.map((row, rowIndex) => (
                 <div key={rowIndex} className="flex flex-col items-center relative">
-                  <div className="flex flex-wrap justify-center gap-x-8 gap-y-12 py-4">
+                  <div className="flex flex-row flex-nowrap justify-center gap-x-8 gap-y-12 py-4 w-max">
                     {row.map((child) => (
                       <div key={child.id} className="relative pt-4">
                         <OrgNode node={child} />
@@ -500,7 +500,7 @@ export default function OrganogramaTab({
               className="flex items-start justify-center p-[800px] min-w-max"
             >
                {tree ? (
-                 <div ref={exportRef} className="flex flex-col items-center">
+                 <div ref={exportRef} className="flex flex-col items-center w-max">
                    <OrgNode node={tree} isRoot={true} />
                  </div>
                ) : (
