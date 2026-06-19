@@ -260,18 +260,6 @@ export default function App() {
   const prevRequestsRef = useRef<AccessRequest[]>([]);
   const isInitialLoadRef = useRef(true);
 
-  // Request Notification Permission
-  useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-  }, []);
-
-  const sendNotification = (title: string, body: string) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body, icon: '/favicon.ico' });
-    }
-  };
   const [selectedRequestForApproval, setSelectedRequestForApproval] = useState<AccessRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [requestSubTab, setRequestSubTab] = useState<'new' | 'my'>('new');
@@ -382,6 +370,70 @@ export default function App() {
     isVisible: false
   });
 
+  const notifiedRequestIdsRef = useRef<Set<string>>(new Set());
+
+  // Notification Handler
+  useEffect(() => {
+    if (!user || requests.length === 0) return;
+
+    if (isInitialLoadRef.current) {
+      // First time loading requests, don't notify but populate the set
+      requests.forEach(req => notifiedRequestIdsRef.current.add(req.id + req.status));
+      prevRequestsRef.current = requests;
+      // Note: isInitialLoadRef.current is set to false in the Firebase sync listener
+      return;
+    }
+
+    const currentUserData = users.find(u => u.id === user.uid);
+    const userRole = roles.find(r => r.id === currentUserData?.roleId);
+    const permissions = [...(userRole?.permissions || []), ...(currentUserData?.permissions || [])];
+    if (currentUserData?.roleId === 'admin') {
+      permissions.push('approve_access'); // Ensure admin has implicit perm
+    }
+    const hasApprovePermission = permissions.includes('approve_access');
+
+    requests.forEach(req => {
+      const notificationKey = req.id + req.status;
+      if (notifiedRequestIdsRef.current.has(notificationKey)) return;
+
+      // New Pending Request (Notify Admins/Approvers)
+      if (req.status === 'pending' && hasApprovePermission) {
+        // Only notify if NOT the one who requested it (optional, but good)
+        if (req.requestedBy !== user.uid) {
+          sendNotification('Nova Solicitação', `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`);
+        }
+      }
+
+      // Rejected Request (Notify Requester)
+      if (req.status === 'rejected' && req.requestedBy === user.uid) {
+        sendNotification('Solicitação Reprovada', `Sua solicitação ${req.requestNumber} foi reprovada.`);
+      }
+
+      // Approved Request (Notify Requester)
+      if (req.status === 'approved' && req.requestedBy === user.uid) {
+        sendNotification('Solicitação Aprovada', `Sua solicitação ${req.requestNumber} foi aprovada!`);
+      }
+
+      notifiedRequestIdsRef.current.add(notificationKey);
+    });
+
+    prevRequestsRef.current = requests;
+    isInitialLoadRef.current = false;
+  }, [requests, user, users, roles]);
+
+  const sendNotification = (title: string, body: string) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/favicon.ico' });
+    }
+  };
+
+  // Request Notification Permission
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
   const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type, isVisible: true });
   };
@@ -451,119 +503,111 @@ export default function App() {
 
     const unsubscribes = [
       onValue(refs.users, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
-          setUsers(list);
-        } else {
-          setUsers([]);
+        try {
+          const data = snapshot.val();
+          if (data) {
+            const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+            setUsers(list);
+          } else {
+            setUsers([]);
+          }
+        } catch (error) {
+          console.error("Erro no listener de usuários:", error);
         }
       }),
       onValue(refs.roles, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
-          setRoles(list);
-        } else {
-          // Seed default roles
-          const defaultRoles: Role[] = [
-            {
-              id: 'admin',
-              name: 'Administrador Geral',
-              permissions: [
-                'settings_analyst_fields',
-                'settings_system_fields',
-                'settings_tracks',
-                'systems_manage',
-                'analysts_manage',
-                'analysts_access_status',
-                'request_access',
-                'approve_access',
-                'extract_data'
-              ],
-              isSystem: true
-            },
-            {
-              id: 'supervisor',
-              name: 'Supervisor',
-              permissions: ['analysts_access_status', 'approve_access'],
-              isSystem: true
-            },
-            {
-              id: 'treinador',
-              name: 'Treinador',
-              permissions: ['analysts_access_status'],
-              isSystem: true
-            },
-            {
-              id: 'requester',
-              name: 'Solicitante',
-              permissions: ['request_access'],
-              isSystem: true
-            }
-          ];
-          defaultRoles.forEach(role => set(ref(db, `roles/${role.id}`), role));
+        try {
+          const data = snapshot.val();
+          if (data) {
+            const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+            setRoles(list);
+          } else {
+            // Seed default roles
+            const defaultRoles: Role[] = [
+              {
+                id: 'admin',
+                name: 'Administrador Geral',
+                permissions: [
+                  'settings_analyst_fields',
+                  'settings_system_fields',
+                  'settings_tracks',
+                  'systems_manage',
+                  'analysts_manage',
+                  'analysts_access_status',
+                  'request_access',
+                  'approve_access',
+                  'extract_data'
+                ],
+                isSystem: true
+              },
+              {
+                id: 'supervisor',
+                name: 'Supervisor',
+                permissions: ['analysts_access_status', 'approve_access'],
+                isSystem: true
+              },
+              {
+                id: 'treinador',
+                name: 'Treinador',
+                permissions: ['analysts_access_status'],
+                isSystem: true
+              },
+              {
+                id: 'requester',
+                name: 'Solicitante',
+                permissions: ['request_access'],
+                isSystem: true
+              }
+            ];
+            defaultRoles.forEach(role => set(ref(db, `roles/${role.id}`), role));
+          }
+        } catch (error) {
+          console.error("Erro no listener de perfis:", error);
         }
       }),
       onValue(refs.requests, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
-          
-          if (!isInitialLoadRef.current) {
-            const newRequests = list.filter(req => !prevRequestsRef.current.find(prev => prev.id === req.id));
-            const changedRequests = list.filter(req => {
-              const prev = prevRequestsRef.current.find(p => p.id === req.id);
-              return prev && prev.status !== req.status;
-            });
-
-            // Notify about new requests (to admins/approvers)
-            if (hasPermission('approve_access')) {
-              newRequests.forEach(req => {
-                if (req.status === 'pending') {
-                  sendNotification('Nova Solicitação', `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`);
-                }
-              });
-            }
-
-            // Notify about rejections (to specific user)
-            changedRequests.forEach(req => {
-              if (req.status === 'rejected' && req.requestedBy === user?.uid) {
-                sendNotification('Solicitação Reprovada', `Sua solicitação ${req.requestNumber} foi reprovada.`);
-              }
-            });
+        try {
+          const data = snapshot.val();
+          if (data) {
+            const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+            setRequests(list);
+          } else {
+            setRequests([]);
           }
-
-          prevRequestsRef.current = list;
-          isInitialLoadRef.current = false;
-          setRequests(list);
-        } else {
-          setRequests([]);
-          isInitialLoadRef.current = false;
+        } catch (error) {
+          console.error("Erro no listener de solicitações:", error);
         }
       }),
       onValue(analystsQuery, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
-          // Sort by name locally as startAt/endAt might return unsorted results if not careful
-          const sortedList = list.sort((a, b) => {
-            const nameA = a.name || a.nome || a.email || a.email_interfile || '';
-            const nameB = b.name || b.nome || b.email || b.email_interfile || '';
-            return nameA.localeCompare(nameB);
-          });
-          setAnalysts(sortedList);
-        } else {
-          setAnalysts([]);
+        try {
+          const data = snapshot.val();
+          if (data) {
+            const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+            // Sort by name locally as startAt/endAt might return unsorted results if not careful
+            const sortedList = list.sort((a, b) => {
+              const nameA = a.name || a.nome || a.email || a.email_interfile || '';
+              const nameB = b.name || b.nome || b.email || b.email_interfile || '';
+              return nameA.localeCompare(nameB);
+            });
+            setAnalysts(sortedList);
+          } else {
+            setAnalysts([]);
+          }
+        } catch (error) {
+          console.error("Erro no listener de analistas (paginado):", error);
         }
       }),
       onValue(refs.analysts, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
-          setAllAnalysts(list);
-        } else {
-          setAllAnalysts([]);
+        try {
+          const data = snapshot.val();
+          if (data) {
+            const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+            setAllAnalysts(list);
+          } else {
+            setAllAnalysts([]);
+          }
+        } catch (error) {
+          console.error("Erro no listener de todos analistas:", error);
         }
       }),
       onValue(refs.systems, (snapshot) => {
