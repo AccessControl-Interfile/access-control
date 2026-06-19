@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Users, 
   Monitor, 
@@ -257,6 +257,21 @@ export default function App() {
   const [systemFields, setSystemFields] = useState<FieldDefinition[]>(INITIAL_SYSTEM_FIELDS);
   const [accesses, setAccesses] = useState<Access[]>([]);
   const [requests, setRequests] = useState<AccessRequest[]>([]);
+  const prevRequestsRef = useRef<AccessRequest[]>([]);
+  const isInitialLoadRef = useRef(true);
+
+  // Request Notification Permission
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const sendNotification = (title: string, body: string) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/favicon.ico' });
+    }
+  };
   const [selectedRequestForApproval, setSelectedRequestForApproval] = useState<AccessRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [requestSubTab, setRequestSubTab] = useState<'new' | 'my'>('new');
@@ -494,9 +509,37 @@ export default function App() {
         const data = snapshot.val();
         if (data) {
           const list = Object.entries(data).map(([id, val]: [string, any]) => ({ ...val, id }));
+          
+          if (!isInitialLoadRef.current) {
+            const newRequests = list.filter(req => !prevRequestsRef.current.find(prev => prev.id === req.id));
+            const changedRequests = list.filter(req => {
+              const prev = prevRequestsRef.current.find(p => p.id === req.id);
+              return prev && prev.status !== req.status;
+            });
+
+            // Notify about new requests (to admins/approvers)
+            if (hasPermission('approve_access')) {
+              newRequests.forEach(req => {
+                if (req.status === 'pending') {
+                  sendNotification('Nova Solicitação', `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`);
+                }
+              });
+            }
+
+            // Notify about rejections (to specific user)
+            changedRequests.forEach(req => {
+              if (req.status === 'rejected' && req.requestedBy === user?.uid) {
+                sendNotification('Solicitação Reprovada', `Sua solicitação ${req.requestNumber} foi reprovada.`);
+              }
+            });
+          }
+
+          prevRequestsRef.current = list;
+          isInitialLoadRef.current = false;
           setRequests(list);
         } else {
           setRequests([]);
+          isInitialLoadRef.current = false;
         }
       }),
       onValue(analystsQuery, (snapshot) => {
@@ -1814,7 +1857,11 @@ export default function App() {
     }
   };
 
-  const handleExportData = async (type: 'analysts' | 'systems' | 'users' | 'tracks' | 'accesses' | 'logs') => {
+  const handleExportData = async (
+    type: 'analysts' | 'systems' | 'users' | 'tracks' | 'accesses' | 'logs',
+    selectedColumns?: string[],
+    statusFilter: 'all' | 'active' | 'deactivated' = 'all'
+  ) => {
     if (type === 'logs' && !hasPermission('extract_logs')) return;
     if (type !== 'logs' && !hasPermission('extract_data')) return;
     
@@ -1829,30 +1876,38 @@ export default function App() {
           const analystsSnapshot = await get(ref(db, 'analysts'));
           const analystsData = analystsSnapshot.val();
           if (analystsData) {
-            const analystsList = Object.values(analystsData) as any[];
+            let analystsList = Object.values(analystsData) as any[];
             
+            // Apply status filter
+            if (statusFilter === 'active') analystsList = analystsList.filter(a => !a.deactivatedAt);
+            else if (statusFilter === 'deactivated') analystsList = analystsList.filter(a => a.deactivatedAt);
+
             // 1. Identify all headers
-            const headersSet = new Set(['Nome', 'Email', 'Esteira', 'Data de Criação', 'Data de Desligamento', 'Aprovado Por']);
+            const defaultHeaders = ['Nome', 'Email', 'Esteira', 'Data de Criação', 'Data de Desligamento', 'Aprovado Por'];
+            const customHeadersSet = new Set<string>();
             analystFields.forEach(f => {
                if (!['name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedByName'].includes(f.id) && !f.id.toLowerCase().includes('esteira')) {
-                 headersSet.add(f.label);
+                  customHeadersSet.add(f.label);
                }
             });
-            // Add any other keys found in data
             analystsList.forEach(val => {
               Object.keys(val).forEach(key => {
                 if (!['id', 'name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key) && !key.toLowerCase().includes('esteira')) {
                   const field = analystFields.find(f => f.id === key);
-                  headersSet.add(field?.label || key);
+                  customHeadersSet.add(field?.label || key);
                 }
               });
             });
-            const allHeaders = Array.from(headersSet);
 
-            // 2. Build rows with consistent keys
+            const allPossibleHeaders = [...defaultHeaders, ...Array.from(customHeadersSet)];
+            const headersToUse = selectedColumns && selectedColumns.length > 0 
+              ? allPossibleHeaders.filter(h => selectedColumns.includes(h))
+              : allPossibleHeaders;
+
+            // 2. Build rows
             dataToExport = analystsList.map(val => {
               const row: any = {};
-              allHeaders.forEach(header => {
+              headersToUse.forEach(header => {
                 if (header === 'Nome') row[header] = getAnalystDisplayName(val);
                 else if (header === 'Email') row[header] = getAnalystEmail(val);
                 else if (header === 'Esteira') row[header] = getAnalystTrack(val);
@@ -1915,41 +1970,55 @@ export default function App() {
           const accessesData = accessesSnapshot.val();
           if (accessesData) {
             const analystsSnapshot = await get(ref(db, 'analysts'));
-            const allAnalysts = analystsSnapshot.val() || {};
-            const accessesList = Object.values(accessesData) as any[];
+            const allAnalystsRaw = analystsSnapshot.val() || {};
+            let accessesList = Object.values(accessesData) as any[];
             
+            // Filter by analyst status
+            if (statusFilter !== 'all') {
+              accessesList = accessesList.filter(acc => {
+                const analyst = allAnalystsRaw[acc.analystId];
+                if (!analyst) return false;
+                if (statusFilter === 'active') return !analyst.deactivatedAt;
+                if (statusFilter === 'deactivated') return !!analyst.deactivatedAt;
+                return true;
+              });
+            }
+
             // 1. Identify all headers
-            const headersSet = new Set(['Nome Sistema', 'Status', 'Última Atualização', 'Nome', 'Email', 'Esteira', 'Data de Criação', 'Data de Desligamento', 'Aprovado Por']);
+            const defaultHeaders = ['Nome Sistema', 'Status', 'Última Atualização', 'Nome', 'Email', 'Esteira', 'Data de Criação', 'Data de Desligamento', 'Aprovado Por'];
+            const customHeadersSet = new Set<string>();
             analystFields.forEach(f => {
                if (!['name', 'email', 'track', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedByName'].includes(f.id) && !f.id.toLowerCase().includes('esteira')) {
-                 headersSet.add(f.label);
+                  customHeadersSet.add(f.label);
                }
             });
-            // Add any other keys found in analyst data
-            Object.values(allAnalysts).forEach((analyst: any) => {
+            Object.values(allAnalystsRaw).forEach((analyst: any) => {
               Object.keys(analyst).forEach(key => {
                 if (!['id', 'name', 'email', 'track', 'supervisor', 'email_interfile', 'esteira', 'createdAt', 'deactivatedAt', 'approvedBy', 'approvedByName'].includes(key) && !key.toLowerCase().includes('esteira')) {
                   const field = analystFields.find(f => f.id === key);
-                  headersSet.add(field?.label || key);
+                  customHeadersSet.add(field?.label || key);
                 }
               });
             });
-            const allHeaders = Array.from(headersSet);
 
-            // 2. Build rows with consistent keys
+            const allPossibleHeaders = [...defaultHeaders, ...Array.from(customHeadersSet)];
+            const headersToUse = selectedColumns && selectedColumns.length > 0 
+              ? allPossibleHeaders.filter(h => selectedColumns.includes(h))
+              : allPossibleHeaders;
+
+            // 2. Build rows
             dataToExport = accessesList.map((acc: any) => {
-              const analyst = allAnalysts[acc.analystId] || {};
+              const analyst = allAnalystsRaw[acc.analystId] || {};
               const system = systems.find(s => s.id === acc.systemId);
               
               const row: any = {};
-              allHeaders.forEach(header => {
+              headersToUse.forEach(header => {
                 if (header === 'Nome Sistema') row[header] = system?.name || 'Desconhecido';
                 else if (header === 'Status') row[header] = acc.status;
                 else if (header === 'Última Atualização') row[header] = acc.updatedAt;
                 else if (header === 'Nome') row[header] = getAnalystDisplayName(analyst);
                 else if (header === 'Email') row[header] = getAnalystEmail(analyst);
                 else if (header === 'Esteira') row[header] = getAnalystTrack(analyst);
-                else if (header === 'Supervisor') row[header] = analyst.supervisor || '';
                 else if (header === 'Data de Criação') row[header] = analyst.createdAt || '';
                 else if (header === 'Data de Desligamento') row[header] = analyst.deactivatedAt || '';
                 else if (header === 'Aprovado Por') row[header] = analyst.approvedByName || '';
@@ -1962,7 +2031,7 @@ export default function App() {
               return row;
             });
           }
-          filename = 'base_acessos';
+          filename = 'matriz_acessos';
           break;
 
         case 'logs':
@@ -2551,6 +2620,7 @@ export default function App() {
                 setLogExportStartDate={setLogExportStartDate}
                 logExportEndDate={logExportEndDate}
                 setLogExportEndDate={setLogExportEndDate}
+                analystFields={analystFields}
               />
             )}
             {activeTab === 'settings' && (
