@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { 
   Users, 
   Monitor, 
@@ -18,6 +19,7 @@ import {
   Trash2,
   Edit2,
   ChevronRight,
+  ChevronLeft,
   LayoutDashboard,
   Settings,
   Menu,
@@ -246,9 +248,38 @@ const UserForm = ({ user, roles, onSave, onCancel, showToast }: { user: User | n
 
 
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'analysts' | 'systems' | 'dashboard' | 'settings' | 'request' | 'approvals' | 'extract'>('dashboard');
+
+  const activeTab = useMemo(() => {
+    const path = decodeURIComponent(location.pathname.substring(1));
+    if (!path) return 'dashboard';
+    if (path === 'Login') return 'login';
+    if (path === 'Analistas') return 'analysts';
+    if (path === 'Sistemas') return 'systems';
+    if (path === 'Solicitacoes') return 'request';
+    if (path === 'Aprovacoes') return 'approvals';
+    if (path === 'Extracao') return 'extract';
+    if (path === 'Configuracoes') return 'settings';
+    return 'dashboard';
+  }, [location.pathname]);
+
+  const setActiveTab = (tab: string) => {
+    const paths: Record<string, string> = {
+      'dashboard': '/',
+      'login': '/Login',
+      'analysts': '/Analistas',
+      'systems': '/Sistemas',
+      'request': '/Solicitacoes',
+      'approvals': '/Aprovacoes',
+      'extract': '/Extracao',
+      'settings': '/Configuracoes'
+    };
+    navigate(paths[tab] || '/');
+  };
+
   const [dashboardViewMode, setDashboardViewMode] = useState<'byTrack' | 'bySystem'>('byTrack');
   const [analysts, setAnalysts] = useState<Analyst[]>([]);
   const [allAnalysts, setAllAnalysts] = useState<Analyst[]>([]);
@@ -365,7 +396,13 @@ export default function App() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarPinned, setIsSidebarPinned] = useState(() => localStorage.getItem('sidebarPinned') === 'true');
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    localStorage.setItem('sidebarPinned', isSidebarPinned.toString());
+  }, [isSidebarPinned]);
   const [isReorderingAnalystFields, setIsReorderingAnalystFields] = useState(false);
   const [isReorderingSystemFields, setIsReorderingSystemFields] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType; isVisible: boolean }>({
@@ -427,7 +464,7 @@ export default function App() {
       return;
     }
 
-    const currentUserData = users.find(u => u.id === user.uid);
+    const currentUserData = users.find(u => u.id === user?.uid);
     const userRole = roles.find(r => r.id === currentUserData?.roleId);
     const permissions = [...(userRole?.permissions || []), ...(currentUserData?.permissions || [])];
     if (currentUserData?.roleId === 'admin') {
@@ -454,7 +491,7 @@ export default function App() {
       }
 
       // Action on Request (Notify Requester OR Admin)
-      if ((req.status === 'rejected' || req.status === 'approved') && (req.requestedBy === user.uid || hasApprovePermission)) {
+      if ((req.status === 'rejected' || req.status === 'approved') && (req.requestedBy === user?.uid || hasApprovePermission)) {
         metadata.title = req.status === 'approved' ? 'Solicitação Aprovada' : 'Solicitação Reprovada';
         metadata.body = `A solicitação ${req.requestNumber} foi ${req.status === 'approved' ? 'aprovada' : 'reprovada'}.`;
       }
@@ -2357,15 +2394,8 @@ export default function App() {
     );
   }
 
-  if (!user) {
-    return <Login />;
-  }
-
-  const currentUserData = users.find(u => u.id === user.uid);
-  if (currentUserData?.mustChangePassword) {
-    return <ChangePassword userId={user.uid} />;
-  }
-
+  const currentUserData = users.find(u => u.id === user?.uid);
+  
   const hasPermission = (permission: Permission) => {
     if (currentUserData?.roleId === 'admin') return true;
     const userRole = roles.find(r => r.id === currentUserData?.roleId);
@@ -2389,60 +2419,102 @@ export default function App() {
                           isSupervisor;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 overflow-x-hidden">
-      {/* Sidebar Overlay for Mobile */}
-      <AnimatePresence>
-        {isSidebarOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
-          />
-        )}
-      </AnimatePresence>
+    <Routes>
+      <Route path="/Login" element={user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="*" element={!user ? <Navigate to="/Login" replace /> : (
+        <>
+          {currentUserData?.mustChangePassword ? (
+            <ChangePassword userId={user?.uid || ''} />
+          ) : (
+            <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 overflow-x-hidden">
+              {/* Sidebar Overlay for Mobile */}
+              <AnimatePresence>
+                {isSidebarOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 lg:hidden"
+                  />
+                )}
+              </AnimatePresence>
 
-      {/* Sidebar */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 lg:translate-x-0 lg:static lg:h-screen",
-        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-3 text-indigo-600">
-            <ShieldCheck className="w-8 h-8" />
-            <span className="font-bold text-lg tracking-tight">AccessControl</span>
+              {/* Sidebar */}
+              <aside 
+                onMouseEnter={() => setIsSidebarHovered(true)}
+                onMouseLeave={() => setIsSidebarHovered(false)}
+                className={cn(
+                  "fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 flex flex-col transition-all duration-300 lg:static lg:h-screen",
+                  isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+                  (isSidebarPinned || isSidebarHovered) ? "w-64" : "w-20"
+                )}
+              >
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between overflow-hidden">
+          <div className="flex items-center gap-3 text-indigo-600 min-w-max">
+            <ShieldCheck className="w-8 h-8 shrink-0" />
+            <motion.span 
+              initial={false}
+              animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, width: (isSidebarPinned || isSidebarHovered) ? 'auto' : 0 }}
+              className="font-bold text-lg tracking-tight whitespace-nowrap overflow-hidden"
+            >
+              AccessControl
+            </motion.span>
           </div>
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-2 text-slate-400 hover:text-slate-600 lg:hidden"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setIsSidebarPinned(!isSidebarPinned)}
+              className={cn(
+                "p-1.5 rounded-lg transition-colors hidden lg:block",
+                isSidebarPinned ? "text-indigo-600 bg-indigo-50" : "text-slate-300 hover:text-slate-500 hover:bg-slate-50"
+              )}
+              title={isSidebarPinned ? "Desafixar menu" : "Fixar menu"}
+            >
+              {isSidebarPinned ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="p-2 text-slate-400 hover:text-slate-600 lg:hidden"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-1">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto no-scrollbar overflow-x-hidden">
           <button 
             onClick={() => { setActiveTab('dashboard'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
-              activeTab === 'dashboard' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-50"
+              "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+              activeTab === 'dashboard' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
             )}
+            title={!(isSidebarPinned || isSidebarHovered) ? "Dashboard" : ""}
           >
-            <LayoutDashboard className="w-5 h-5" />
-            Dashboard
+            <LayoutDashboard className="w-5 h-5 shrink-0" />
+            <motion.span
+              animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+              className="whitespace-nowrap overflow-hidden"
+            >
+              Dashboard
+            </motion.span>
           </button>
           
           {canViewAnalysts && (
             <button 
               onClick={() => { setActiveTab('analysts'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
-                activeTab === 'analysts' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-50"
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+                activeTab === 'analysts' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Analistas" : ""}
             >
-              <Users className="w-5 h-5" />
-              Analistas
+              <Users className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Analistas
+              </motion.span>
             </button>
           )}
 
@@ -2450,12 +2522,18 @@ export default function App() {
             <button 
               onClick={() => { setActiveTab('systems'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
-                activeTab === 'systems' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-50"
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+                activeTab === 'systems' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Sistemas" : ""}
             >
-              <Monitor className="w-5 h-5" />
-              Sistemas
+              <Monitor className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Sistemas
+              </motion.span>
             </button>
           )}
 
@@ -2463,14 +2541,23 @@ export default function App() {
             <button 
               onClick={() => { setActiveTab('request'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative",
-                activeTab === 'request' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-50"
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative group",
+                activeTab === 'request' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Solicitações" : ""}
             >
-              <PlusCircle className="w-5 h-5" />
-              Solicitações
+              <PlusCircle className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Solicitações
+              </motion.span>
               {requests.filter(r => r.status === 'rejected' && r.requestedBy === user?.uid).length > 0 && (
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full">
+                <span className={cn(
+                  "absolute bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full transition-all",
+                  (isSidebarPinned || isSidebarHovered) ? "right-4 w-5 h-5" : "right-1.5 top-2 w-4 h-4"
+                )}>
                   {requests.filter(r => r.status === 'rejected' && r.requestedBy === user?.uid).length}
                 </span>
               )}
@@ -2481,14 +2568,23 @@ export default function App() {
             <button 
               onClick={() => { setActiveTab('approvals'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative",
-                activeTab === 'approvals' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-50"
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative group",
+                activeTab === 'approvals' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Aprovações" : ""}
             >
-              <ClipboardCheck className="w-5 h-5" />
-              Aprovações
+              <ClipboardCheck className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Aprovações
+              </motion.span>
               {requests.filter(r => r.status === 'pending').length > 0 && (
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full">
+                <span className={cn(
+                  "absolute bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full transition-all",
+                  (isSidebarPinned || isSidebarHovered) ? "right-4 w-5 h-5" : "right-1.5 top-2 w-4 h-4"
+                )}>
                   {requests.filter(r => r.status === 'pending').length}
                 </span>
               )}
@@ -2499,18 +2595,27 @@ export default function App() {
             <button 
               onClick={() => { setActiveTab('extract'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
-                activeTab === 'extract' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-50"
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+                activeTab === 'extract' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Extrair Bases" : ""}
             >
-              <Download className="w-5 h-5" />
-              Extrair Bases
+              <Download className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Extrair Bases
+              </motion.span>
             </button>
           )}
         </nav>
 
-        <div className="p-4 border-t border-slate-100">
-          <div className="bg-slate-50 rounded-2xl p-4">
+        <div className="p-4 border-t border-slate-100 overflow-hidden">
+          <div className={cn(
+            "bg-slate-50 rounded-2xl p-4 transition-all duration-300",
+            (isSidebarPinned || isSidebarHovered) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+          )}>
             <div className="mb-3">
               <p className="text-sm font-semibold truncate" title={currentUserData?.name || user?.email || 'Usuário'}>
                 {currentUserData?.name || 'Usuário'}
@@ -2541,6 +2646,30 @@ export default function App() {
               Sair
             </button>
           </div>
+
+          {!(isSidebarPinned || isSidebarHovered) && (
+            <div className="flex flex-col items-center gap-4 py-2">
+              {canViewSettings && (
+                <button 
+                  onClick={() => setActiveTab('settings')}
+                  className={cn(
+                    "p-2 rounded-lg transition-colors",
+                    activeTab === 'settings' ? "bg-indigo-100 text-indigo-600" : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  )}
+                  title="Configurações"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              )}
+              <button 
+                onClick={handleLogout}
+                className="p-2 text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors"
+                title="Sair"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -3217,6 +3346,10 @@ export default function App() {
           onClose={() => setToast(prev => ({ ...prev, isVisible: false }))} 
         />
       </AnimatePresence>
-    </div>
+            </div>
+          )}
+        </>
+      )} />
+    </Routes>
   );
 }
