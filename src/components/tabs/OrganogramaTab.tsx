@@ -43,47 +43,47 @@ export default function OrganogramaTab({
   const x = useMotionValue(0);
   const y = useMotionValue(0);
 
-  // Build the tree (Limited to 1 level below root as requested)
+  // Build the tree recursively to get all subordinates down the chain
   const buildTree = useCallback((rootName: string): HierarchyNode | null => {
     if (!rootName) return null;
-    const cleanRootName = rootName.trim();
 
-    const supervisorData = supervisors.find(s => s.name.trim().toLowerCase() === cleanRootName.toLowerCase());
-    const analystData = analysts.find(a => getAnalystDisplayName(a).trim().toLowerCase() === cleanRootName.toLowerCase());
+    const visited = new Set<string>();
 
-    const node: HierarchyNode = {
-      id: analystData?.id || supervisorData?.id || `node-${cleanRootName}`,
-      name: cleanRootName,
-      type: analystData ? 'analyst' : 'supervisor',
-      track: analystData ? analystData.track : undefined,
-      analystData: analystData,
-      children: []
+    const buildNode = (currentName: string): HierarchyNode | null => {
+      const cleanName = currentName.trim();
+      const lowerName = cleanName.toLowerCase();
+
+      if (visited.has(lowerName)) return null;
+      visited.add(lowerName);
+
+      const supervisorData = supervisors.find(s => s.name.trim().toLowerCase() === lowerName);
+      const analystData = analysts.find(a => getAnalystDisplayName(a).trim().toLowerCase() === lowerName);
+
+      const reports = analysts.filter(a => {
+        const supervisorMatch = (a.supervisor || '').trim().toLowerCase() === lowerName;
+        const isDeactivated = !!a.deactivatedAt;
+        const statusMatch = 
+          filterMode === 'todos' ? true :
+          filterMode === 'ativos' ? !isDeactivated :
+          isDeactivated;
+        return supervisorMatch && statusMatch;
+      });
+
+      const children = reports
+        .map(r => buildNode(getAnalystDisplayName(r)))
+        .filter((child): child is HierarchyNode => child !== null);
+
+      return {
+        id: analystData?.id || supervisorData?.id || `node-${cleanName}`,
+        name: cleanName,
+        type: analystData ? 'analyst' : 'supervisor',
+        track: analystData ? analystData.track : undefined,
+        analystData: analystData,
+        children
+      };
     };
 
-    // Find ONLY direct reports
-    const reports = analysts.filter(a => {
-      const supervisorMatch = (a.supervisor || '').trim().toLowerCase() === cleanRootName.toLowerCase();
-      const isDeactivated = !!a.deactivatedAt;
-      const statusMatch = 
-        filterMode === 'todos' ? true :
-        filterMode === 'ativos' ? !isDeactivated :
-        isDeactivated;
-      return supervisorMatch && statusMatch;
-    });
-
-    reports.forEach(report => {
-      const reportName = getAnalystDisplayName(report);
-      node.children.push({
-        id: report.id,
-        name: reportName,
-        type: 'analyst',
-        track: report.track,
-        analystData: report,
-        children: [] // Children will be loaded only if navigated into
-      });
-    });
-
-    return node;
+    return buildNode(rootName);
   }, [analysts, supervisors, filterMode, getAnalystDisplayName]);
 
   const tree = useMemo(() => buildTree(selectedRoot), [selectedRoot, buildTree]);
@@ -112,24 +112,8 @@ export default function OrganogramaTab({
       // Wait for re-render
       await new Promise(resolve => setTimeout(resolve, 600));
 
-      const bounds = exportRef.current.getBoundingClientRect();
-      const exportWidth = Math.max(exportRef.current.scrollWidth, bounds.width);
-      const exportHeight = Math.max(exportRef.current.scrollHeight, bounds.height);
-
       const blob = await toPng(exportRef.current, {
         backgroundColor: document.documentElement.classList.contains('dark') ? '#0f172a' : '#f8fafc',
-        style: {
-          transform: 'scale(1)',
-          margin: '0',
-          padding: '80px', // Extra margin for the image
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          width: `${exportWidth}px`,
-          height: `${exportHeight}px`
-        },
-        width: exportWidth + 160,
-        height: exportHeight + 160,
         pixelRatio: 2
       });
       
@@ -165,21 +149,17 @@ export default function OrganogramaTab({
     const headers = ['Esteira', 'Nome', 'Email'];
     const rowData: string[][] = [];
     
-    // Root Row
-    rowData.push([
-        tree.track || '',
-        tree.name,
-        tree.analystData ? getAnalystEmail(tree.analystData) : ''
-    ]);
-
-    // Children Rows
-    tree.children.forEach(child => {
-        rowData.push([
-            child.track || '',
-            child.name,
-            child.analystData ? getAnalystEmail(child.analystData) : ''
-        ]);
-    });
+    // Recursive extraction
+    const extractRows = (node: HierarchyNode) => {
+      rowData.push([
+          node.track || '',
+          node.name,
+          node.analystData ? getAnalystEmail(node.analystData) : ''
+      ]);
+      node.children.forEach(child => extractRows(child));
+    };
+    
+    extractRows(tree);
 
     const tsvContent = [headers.join('\t'), ...rowData.map(r => r.join('\t'))].join('\n');
     
@@ -259,20 +239,18 @@ export default function OrganogramaTab({
   }, []);
 
   function OrgNode({ node, isRoot = false }: { node: HierarchyNode; isRoot?: boolean }) {
-    // Check subordinates globally since children list in node is now only direct
-    const actualSubordinates = useMemo(() => {
-        return analysts.filter(a => (a.supervisor || '').trim().toLowerCase() === node.name.toLowerCase());
-    }, [node.name]);
+    const hasChildren = node.children.length > 0;
     
-    const hasChildren = actualSubordinates.length > 0;
-    
-    const childrenRows = useMemo(() => {
-      const rows = [];
-      for (let i = 0; i < node.children.length; i += 10) {
-        rows.push(node.children.slice(i, i + 10));
+    const layoutItems = useMemo(() => {
+      const normalChildren = node.children.filter(child => child.children.length > 0 || isRoot);
+      const leafChildren = node.children.filter(child => child.children.length === 0 && !isRoot);
+      
+      const items: any[] = [...normalChildren];
+      if (leafChildren.length > 0) {
+        items.push({ isLeafGroup: true, id: `leaf-group-${node.id}`, leaves: leafChildren });
       }
-      return rows;
-    }, [node.children]);
+      return items;
+    }, [node.children, isRoot, node.id]);
 
     return (
       <div className="flex flex-col items-center">
@@ -286,7 +264,7 @@ export default function OrganogramaTab({
             }
           }}
           className={cn(
-            "p-3 rounded-2xl border-2 shadow-sm min-w-[200px] text-center relative z-10 transition-all",
+            "p-3 rounded-2xl border-2 shadow-sm w-[280px] text-center relative z-10 transition-all",
             isRoot ? "bg-indigo-600 border-indigo-500 text-white cursor-default" : 
             hasChildren ? "bg-white border-indigo-200 text-slate-800 hover:border-indigo-400 hover:shadow-md cursor-pointer ring-0 hover:ring-2 hover:ring-indigo-100" :
             node.type === 'supervisor' ? "bg-indigo-50 border-indigo-200 text-indigo-700 cursor-default" :
@@ -314,17 +292,17 @@ export default function OrganogramaTab({
               </div>
             )}
             
-            <p className="font-bold text-xs truncate max-w-[180px]" title={node.name}>{node.name}</p>
+            <p className="font-bold text-xs truncate max-w-[260px]" title={node.name}>{node.name}</p>
             
             <div className="flex flex-col items-center">
               <p className={cn(
-                "text-[9px] truncate max-w-[170px] font-bold uppercase tracking-wider",
+                "text-[9px] truncate max-w-[250px] font-bold uppercase tracking-wider",
                 isRoot ? "text-indigo-100" : "text-indigo-500 "
               )}>
                 {node.track || (node.type === 'supervisor' ? 'S/ Esteira' : '')}
               </p>
               {node.analystData && (
-                <p className="text-[8px] opacity-50 truncate max-w-[170px] mt-0.5">{getAnalystEmail(node.analystData)}</p>
+                <p className="text-[8px] opacity-50 truncate max-w-[250px] mt-0.5">{getAnalystEmail(node.analystData)}</p>
               )}
             </div>
           </div>
@@ -343,22 +321,51 @@ export default function OrganogramaTab({
         </motion.button>
 
 
-        {isRoot && hasChildren && (
-          <div className="relative pt-10 flex flex-col items-center">
-            <div className="flex flex-col gap-0">
-              {childrenRows.map((row, rowIndex) => (
-                <div key={rowIndex} className="flex flex-col items-center relative">
-                  <div className="flex flex-row flex-nowrap justify-center gap-x-8 gap-y-12 py-4 w-max">
-                    {row.map((child) => (
-                      <div key={child.id} className="relative pt-4">
-                        <OrgNode node={child} />
+        {hasChildren && (
+          <>
+            <div className="w-[2px] h-8 bg-slate-200" />
+            <div className="flex flex-row justify-center w-max">
+              {layoutItems.map((child: any, i: number) => (
+                <div key={child.id} className="relative flex flex-col items-center px-4">
+                  {layoutItems.length > 1 && (
+                    <div className={cn(
+                      "absolute top-0 h-[2px] bg-slate-200",
+                      i === 0 ? "left-1/2 right-0" :
+                      i === layoutItems.length - 1 ? "left-0 right-1/2" :
+                      "left-0 right-0"
+                    )} />
+                  )}
+                  <div className="w-[2px] h-8 bg-slate-200" />
+                  
+                  {child.isLeafGroup ? (
+                    <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-sm w-[280px] text-center relative z-10 transition-all">
+                      <div className="font-bold text-xs mb-3 text-slate-500 uppercase flex items-center justify-center gap-2">
+                         <Users className="w-3 h-3" />
+                         Analistas ({child.leaves.length})
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex flex-col gap-2">
+                        {child.leaves.map((leaf: HierarchyNode) => (
+                          <div key={leaf.id} className="bg-slate-50 p-3 border border-slate-100 rounded-xl text-left shadow-sm">
+                            <p className="font-bold text-xs text-slate-700 truncate" title={leaf.name}>{leaf.name}</p>
+                            {(leaf.track || leaf.type === 'supervisor') && (
+                              <p className="text-[9px] text-indigo-500 font-bold uppercase truncate mt-0.5">{leaf.track || (leaf.type === 'supervisor' ? 'S/ Esteira' : '')}</p>
+                            )}
+                            {leaf.analystData?.deactivatedAt && (
+                              <div className="flex items-center gap-1 mt-1 text-[8px] text-rose-500 font-bold">
+                                <UserMinus className="w-2.5 h-2.5" /> DESLIGADO
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <OrgNode node={child} />
+                  )}
                 </div>
               ))}
             </div>
-          </div>
+          </>
         )}
       </div>
     );
@@ -524,7 +531,7 @@ export default function OrganogramaTab({
               className="flex items-start justify-center p-[800px] min-w-max"
             >
                {tree ? (
-                 <div ref={exportRef} className="flex flex-col items-center w-max">
+                 <div ref={exportRef} className="flex flex-col items-center w-max p-20">
                    <OrgNode node={tree} isRoot={true} />
                  </div>
                ) : (

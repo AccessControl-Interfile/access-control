@@ -305,6 +305,7 @@ export default function App() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [importMatchField, setImportMatchField] = useState<string>('');
   
   const [isMassDeactivateModalOpen, setIsMassDeactivateModalOpen] = useState(false);
   const [massDeactivateField, setMassDeactivateField] = useState<string>('');
@@ -1945,26 +1946,27 @@ export default function App() {
           }
         });
         
-        const emailField = analystFields.find(f => f.type === 'email' || f.id === 'email' || f.id === 'email_interfile' || f.label.toLowerCase().includes('email') || f.label.toLowerCase().includes('e-mail'));
-        const emailKey = emailField?.id || 'email_interfile';
-        const emailVal = analystData[emailKey] || analystData.email || analystData.email_interfile;
+        const matchFieldId = importMatchField || 'email_interfile';
+        const matchValue = analystData[matchFieldId];
         
-        if (!emailVal) continue; // Email is required
+        if (!matchValue) continue; // Match field is required
         
         validRows++;
-        const email = emailVal.toLowerCase();
+        const matchValueLower = String(matchValue).toLowerCase();
+
         let analystId = allAnalysts.find(a => {
-           const aEmail = a[emailKey] || a.email || a.email_interfile;
-           return aEmail && typeof aEmail === 'string' && aEmail.toLowerCase() === email;
+           const val = a[matchFieldId];
+           return val && typeof val === 'string' && val.toLowerCase() === matchValueLower;
         })?.id;
         
         if (!analystId) {
           const existingNew = Object.entries(newAnalysts).find(([id, a]: [string, any]) => {
-             const aEmail = a[emailKey] || a.email || a.email_interfile;
-             return aEmail && typeof aEmail === 'string' && aEmail.toLowerCase() === email;
+             const val = a[matchFieldId];
+             return val && typeof val === 'string' && val.toLowerCase() === matchValueLower;
           });
           if (existingNew) {
             analystId = existingNew[0];
+            newAnalysts[analystId] = { ...newAnalysts[analystId], ...analystData };
           } else {
             analystId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
             newAnalysts[analystId] = {
@@ -1976,8 +1978,8 @@ export default function App() {
             };
           }
         } else {
-           const existingAnalyst = allAnalysts.find(a => a.id === analystId);
-           updates[`analysts/${analystId}`] = { ...existingAnalyst, ...analystData };
+           const existingAnalyst = updates[`analysts/${analystId}`] || allAnalysts.find(a => a.id === analystId);
+           updates[`analysts/${analystId}`] = { ...existingAnalyst, ...analystData, updatedAt: new Date().toISOString() };
         }
         
         const systemName = rowData['Nome Sistema'];
@@ -3087,6 +3089,23 @@ export default function App() {
                 </p>
 
                 <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Campo de Referência</label>
+                    <select
+                      value={importMatchField}
+                      onChange={(e) => setImportMatchField(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium text-slate-700"
+                    >
+                      <option value="">Selecione o campo (ex: E-mail)</option>
+                      {analystFields.map(f => (
+                        <option key={f.id} value={f.id}>{f.label}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Este campo será usado para encontrar o analista. Se encontrado, seus dados serão atualizados. Caso contrário, um novo será criado.
+                    </p>
+                  </div>
+
                   <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <FileText className="w-8 h-8 text-indigo-600" />
@@ -3115,7 +3134,7 @@ export default function App() {
 
                   <button 
                     onClick={() => importFile && handleImport(importFile)}
-                    disabled={!importFile || isImporting}
+                    disabled={!importFile || !importMatchField || isImporting}
                     className="w-full py-4 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isImporting ? (
