@@ -1,40 +1,54 @@
 export type AccessStatus = 'Ok' | 'Pendente' | 'Acesso perdido';
 
-export type Permission = 
-  | 'settings_analyst_fields'
-  | 'settings_system_fields'
-  | 'settings_tracks'
-  | 'settings_supervisors'
-  | 'settings_users'
-  | 'settings_roles'
-  | 'systems_manage'
-  | 'analysts_manage'
-  | 'analysts_access_status'
-  | 'request_access'
-  | 'approve_access'
-  | 'extract_data'
-  | 'extract_logs';
+export type AccessLevel = 'none' | 'read' | 'edit_approval' | 'edit';
 
-export const PERMISSIONS_LABELS: Record<Permission, string> = {
-  'settings_analyst_fields': 'Configurações: Campos de Analista',
-  'settings_system_fields': 'Configurações: Campos de Sistema',
-  'settings_tracks': 'Configurações: Gestão de Esteiras',
-  'settings_supervisors': 'Configurações: Gestão de Supervisores',
-  'settings_users': 'Configurações: Gestão de Usuários',
-  'settings_roles': 'Configurações: Gestão de Perfis',
-  'systems_manage': 'Sistemas: Gerenciar Sistemas',
-  'analysts_manage': 'Analistas: Dados Cadastrais',
-  'analysts_access_status': 'Analistas: Status de Acesso',
-  'request_access': 'Solicitar: Criar Solicitações',
-  'approve_access': 'Solicitar: Aprovar Solicitações',
-  'extract_data': 'Extrair: Bases de Dados',
-  'extract_logs': 'Extrair: Logs de Auditoria',
+export type AppModule = 
+  | 'dashboard'
+  | 'analysts'
+  | 'systems'
+  | 'requests'
+  | 'approvals'
+  | 'extract'
+  | 'organogram'
+  | 'tracks'
+  | 'settings'
+  | 'settings_analysts'
+  | 'settings_systems'
+  | 'settings_supervisors';
+
+export const MODULE_LABELS: Record<AppModule, string> = {
+  dashboard: 'Dashboard',
+  analysts: 'Analistas',
+  systems: 'Sistemas',
+  requests: 'Solicitações',
+  approvals: 'Aprovações',
+  extract: 'Extrair Base',
+  organogram: 'Organograma',
+  tracks: 'Gestão de Esteiras',
+  settings: 'Configurações',
+  settings_analysts: 'Definição de Analista',
+  settings_systems: 'Definição de Sistema',
+  settings_supervisors: 'Gestão de Supervisores'
+};
+
+export const LEVEL_LABELS: Record<AccessLevel, string> = {
+  none: 'Ocultar',
+  read: 'Leitura',
+  edit_approval: 'Editar mediante Aprovação',
+  edit: 'Leitura e Edição'
+};
+
+export const LEVEL_WEIGHTS: Record<AccessLevel, number> = {
+  none: 0,
+  read: 1,
+  edit_approval: 2,
+  edit: 3
 };
 
 export interface Role {
   id: string;
   name: string;
-  permissions: Permission[];
+  permissions: Record<AppModule, AccessLevel>;
   isSystem?: boolean;
 }
 
@@ -42,8 +56,9 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  roleId?: string;
-  permissions: Permission[];
+  roleIds: string[]; // Support multiple profiles
+  roleId?: string; // Legacy support
+  permissions?: any; // Legacy support
   mustChangePassword?: boolean;
   notificationSound?: string;
 }
@@ -67,6 +82,7 @@ export interface System {
 export interface Track {
   id: string;
   name: string;
+  hiredCount?: string;
 }
 
 export interface Supervisor {

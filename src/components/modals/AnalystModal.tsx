@@ -4,7 +4,7 @@ import { X, Search, Check, Monitor } from 'lucide-react';
 import { ref, set, update, remove } from 'firebase/database';
 import { db } from '../../lib/firebase';
 import { cn } from '../../lib/utils';
-import { Analyst, FieldDefinition, Track, System, Access, User, Supervisor, AccessRequest } from '../../types';
+import { Analyst, FieldDefinition, Track, System, Access, User, Supervisor, AccessRequest, AppModule, AccessLevel } from '../../types';
 
 interface AnalystModalProps {
   isOpen: boolean;
@@ -15,6 +15,7 @@ interface AnalystModalProps {
   supervisors: Supervisor[];
   systems: System[];
   accesses: Access[];
+  hasPermission: (module: AppModule, level: AccessLevel) => boolean;
   canManageAnalysts: boolean;
   canManageAccess: boolean;
   user: User | null;
@@ -33,6 +34,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
   supervisors,
   systems,
   accesses,
+  hasPermission,
   canManageAnalysts,
   canManageAccess,
   user,
@@ -141,8 +143,8 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
 
   if (!isOpen) return null;
 
-  const canEdit = canManageAnalysts || user?.roleId === 'supervisor' || user?.roleId === 'treinador';
-  const needsApproval = user?.roleId === 'supervisor' || user?.roleId === 'treinador';
+  const canEdit = hasPermission('analysts', 'edit') || hasPermission('analysts', 'edit_approval');
+  const needsApproval = hasPermission('analysts', 'edit_approval') && !hasPermission('analysts', 'edit');
 
   const handleAddAnalyst = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

@@ -24,6 +24,7 @@ interface AnalystsTabProps {
   accesses: Access[];
   systems: System[];
   canManageAnalysts: boolean;
+  canDeleteAnalyst?: boolean;
   canManageAccess: boolean;
   currentUserRole: string | undefined;
   deactivateAnalyst: (id: string) => void;
@@ -48,6 +49,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
   accesses,
   systems,
   canManageAnalysts,
+  canDeleteAnalyst,
   canManageAccess,
   currentUserRole,
   deactivateAnalyst,
@@ -143,11 +145,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           >
                             <ShieldCheck className="w-5 h-5" />
                           </button>
-                          {canManageAnalysts && 
-                           currentUserRole !== 'supervisor' && 
-                           currentUserRole !== 'treinador' && 
-                           currentUserRole !== 'Supervisor' && 
-                           currentUserRole !== 'Treinador' && (
+                          {canManageAnalysts && (
                             <>
                               <button 
                                 onClick={() => deactivateAnalyst(analyst.id)}
@@ -167,6 +165,9 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                               >
                                 <Edit2 className="w-5 h-5" />
                               </button>
+                            </>
+                          )}
+                          {canDeleteAnalyst && (
                               <button 
                                 onClick={() => deleteAnalyst(analyst.id)}
                                 disabled={!!analyst.deactivatedAt}
@@ -178,7 +179,6 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                               >
                                 <Trash2 className="w-5 h-5" />
                               </button>
-                            </>
                           )}
                         </div>
                       </td>
@@ -231,11 +231,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                       >
                         <ShieldCheck className="w-5 h-5" />
                       </button>
-                      {canManageAnalysts && 
-                       currentUserRole !== 'supervisor' && 
-                       currentUserRole !== 'treinador' && 
-                       currentUserRole !== 'Supervisor' && 
-                       currentUserRole !== 'Treinador' && (
+                      {canManageAnalysts && (
                         <>
                           <button 
                             onClick={() => deactivateAnalyst(analyst.id)}
@@ -253,6 +249,9 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           >
                             <Edit2 className="w-5 h-5" />
                           </button>
+                        </>
+                      )}
+                      {canDeleteAnalyst && (
                           <button 
                             onClick={() => deleteAnalyst(analyst.id)}
                             disabled={!!analyst.deactivatedAt}
@@ -263,7 +262,6 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>
-                        </>
                       )}
                     </div>
                   </div>

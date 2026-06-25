@@ -23,7 +23,7 @@ export default function Login() {
     try {
       // Tenta logar com a senha padrão para verificar se é primeiro acesso
       await signInWithEmailAndPassword(auth, cleanEmail, 'InterFile123$$');
-      // Se der certo, o onAuthStateChanged no App.tsx vai capturar e redirecionar
+      // Se der certo, o onAuthStateChanged no App.tsx vai capturar e redirecionar para troca de senha caso mustChangePassword seja true
       await logAction(cleanEmail, 'LOGIN_FIRST_ACCESS', 'Realizou login de primeiro acesso (senha padrão)', 'Autenticação');
     } catch (err: any) {
       // Se a senha estiver errada (auth/wrong-password) OU se der credencial inválida (auth/invalid-credential),
@@ -54,6 +54,7 @@ export default function Login() {
 
     try {
       await signInWithEmailAndPassword(auth, cleanEmail, password);
+      
       // Login bem-sucedido no Authentication.
       // O App.tsx observará a mudança de estado e renderizará o Dashboard.
       await logAction(cleanEmail, 'LOGIN_SUCCESS', 'Realizou login no sistema', 'Autenticação');
@@ -167,13 +168,15 @@ export default function Login() {
               </button>
               
               {showPasswordInput && (
-                <button 
-                  type="button"
-                  onClick={() => { setShowPasswordInput(false); setError(''); }}
-                  className="w-full py-2 mt-2 text-slate-400 hover:text-indigo-600 text-sm font-medium transition-colors cursor-pointer"
-                >
-                  Voltar e alterar e-mail
-                </button>
+                <div className="flex flex-col items-center gap-3 mt-4">
+                  <button 
+                    type="button"
+                    onClick={() => { setShowPasswordInput(false); setError(''); }}
+                    className="w-full py-2 text-slate-400 hover:text-indigo-600 text-sm font-medium transition-colors cursor-pointer"
+                  >
+                    Voltar e alterar e-mail
+                  </button>
+                </div>
               )}
             </form>
           </div>

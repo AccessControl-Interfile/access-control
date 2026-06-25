@@ -3,7 +3,7 @@ import { motion, AnimatePresence, Reorder } from 'framer-motion';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { ref, set } from 'firebase/database';
 import { db } from '../../lib/firebase';
-import { FieldDefinition, Permission, User } from '../../types';
+import { FieldDefinition, User, AppModule, AccessLevel } from '../../types';
 import { cn } from '../../lib/utils';
 
 interface OptionItem {
@@ -17,7 +17,7 @@ interface FieldModalProps {
   onClose: () => void;
   analystFields: FieldDefinition[];
   systemFields: FieldDefinition[];
-  hasPermission: (permission: Permission) => boolean;
+  hasPermission: (module: AppModule, level: AccessLevel) => boolean;
   user: User | null;
   logAction: (userEmail: string, action: string, details: string, module: string, previousData?: any, newData?: any) => Promise<void>;
   showToast: (message: string, type: 'success' | 'error' | 'info') => void;

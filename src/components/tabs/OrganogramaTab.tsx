@@ -13,6 +13,8 @@ interface OrganogramaTabProps {
   getAnalystDisplayName: (a: Analyst) => string;
   getAnalystEmail: (a: Analyst) => string;
   getAnalystInitials: (a: Analyst) => string;
+  getAnalystTrack: (a: Analyst) => string;
+  tracks: import('../../types').Track[];
 }
 
 interface HierarchyNode {
@@ -29,7 +31,9 @@ export default function OrganogramaTab({
   supervisors,
   getAnalystDisplayName,
   getAnalystEmail,
-  getAnalystInitials
+  getAnalystInitials,
+  getAnalystTrack,
+  tracks
 }: OrganogramaTabProps) {
   const [selectedRoot, setSelectedRoot] = useState<string>('');
   const [rootHistory, setRootHistory] = useState<string[]>([]);
@@ -247,7 +251,19 @@ export default function OrganogramaTab({
       
       const items: any[] = [...normalChildren];
       if (leafChildren.length > 0) {
-        items.push({ isLeafGroup: true, id: `leaf-group-${node.id}`, leaves: leafChildren });
+        const groupsByTrack = leafChildren.reduce((acc, leaf) => {
+          const trackName = leaf.track || 'S/ Esteira';
+          if (!acc[trackName]) acc[trackName] = [];
+          acc[trackName].push(leaf);
+          return acc;
+        }, {} as Record<string, HierarchyNode[]>);
+        
+        items.push({ 
+          isLeafGroup: true, 
+          id: `leaf-group-${node.id}`, 
+          totalLeaves: leafChildren.length,
+          groupsByTrack 
+        });
       }
       return items;
     }, [node.children, isRoot, node.id]);
@@ -338,26 +354,53 @@ export default function OrganogramaTab({
                   <div className="w-[2px] h-8 bg-slate-200" />
                   
                   {child.isLeafGroup ? (
-                    <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-sm w-[280px] text-center relative z-10 transition-all">
-                      <div className="font-bold text-xs mb-3 text-slate-500 uppercase flex items-center justify-center gap-2">
+                    <div className="p-3 rounded-2xl bg-white border border-slate-200 shadow-sm w-[300px] text-center relative z-10 transition-all flex flex-col gap-4">
+                      <div className="font-bold text-xs text-slate-500 uppercase flex items-center justify-center gap-2">
                          <Users className="w-3 h-3" />
-                         Analistas ({child.leaves.length})
+                         Total Analistas ({child.totalLeaves})
                       </div>
-                      <div className="flex flex-col gap-2">
-                        {child.leaves.map((leaf: HierarchyNode) => (
-                          <div key={leaf.id} className="bg-slate-50 p-3 border border-slate-100 rounded-xl text-left shadow-sm">
-                            <p className="font-bold text-xs text-slate-700 truncate" title={leaf.name}>{leaf.name}</p>
-                            {(leaf.track || leaf.type === 'supervisor') && (
-                              <p className="text-[9px] text-indigo-500 font-bold uppercase truncate mt-0.5">{leaf.track || (leaf.type === 'supervisor' ? 'S/ Esteira' : '')}</p>
-                            )}
-                            {leaf.analystData?.deactivatedAt && (
-                              <div className="flex items-center gap-1 mt-1 text-[8px] text-rose-500 font-bold">
-                                <UserMinus className="w-2.5 h-2.5" /> DESLIGADO
+                      
+                      {Object.entries(child.groupsByTrack as Record<string, HierarchyNode[]>).map(([trackName, leaves]) => {
+                        const trackObj = tracks.find(t => t.name.toLowerCase() === trackName.toLowerCase());
+                        const hiredCount = trackObj?.hiredCount ? parseInt(trackObj.hiredCount, 10) : undefined;
+                        const validHiredCount = hiredCount !== undefined && !isNaN(hiredCount) && hiredCount > 0 ? hiredCount : null;
+                        
+                        const totalTrackAnalysts = analysts.filter(a => !a.deactivatedAt && (getAnalystTrack(a) || 'S/ Esteira').toLowerCase() === trackName.toLowerCase()).length;
+
+                        return (
+                          <div key={trackName} className="flex flex-col gap-2">
+                            <div className="flex items-center justify-between px-1">
+                              <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">{trackName}</span>
+                              <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                                <span className={cn(
+                                  validHiredCount && totalTrackAnalysts > validHiredCount ? "text-rose-500" : "text-slate-600"
+                                )}>
+                                  {totalTrackAnalysts}
+                                </span>
+                                {validHiredCount && (
+                                  <>
+                                    <span>/</span>
+                                    <span>{validHiredCount}</span>
+                                  </>
+                                )}
                               </div>
-                            )}
+                            </div>
+                            
+                            <div className="flex flex-col gap-1.5">
+                              {leaves.map((leaf: HierarchyNode) => (
+                                <div key={leaf.id} className="bg-slate-50 p-2.5 border border-slate-100 rounded-xl text-left shadow-sm">
+                                  <p className="font-bold text-xs text-slate-700 truncate" title={leaf.name}>{leaf.name}</p>
+                                  {leaf.analystData?.deactivatedAt && (
+                                    <div className="flex items-center gap-1 mt-1 text-[8px] text-rose-500 font-bold">
+                                      <UserMinus className="w-2.5 h-2.5" /> DESLIGADO
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <OrgNode node={child} />

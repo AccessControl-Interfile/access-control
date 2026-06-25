@@ -20,7 +20,9 @@ import {
   Edit2,
   ChevronRight,
   ChevronLeft,
+  GitBranch,
   LayoutDashboard,
+  Route as RouteIcon,
   Settings,
   Menu,
   X,
@@ -58,12 +60,14 @@ import { db, auth, firebaseConfig, logDb } from './lib/firebase';
 import { logAction } from './lib/auditLogger';
 import DashboardTab from './components/tabs/DashboardTab';
 import SettingsTab from './components/tabs/SettingsTab';
+import AccessControlTab from './components/tabs/AccessControlTab';
 import AnalystsTab from './components/tabs/AnalystsTab';
 import SystemsTab from './components/tabs/SystemsTab';
 import RequestTab from './components/tabs/RequestTab';
 import ApprovalsTab from './components/tabs/ApprovalsTab';
 import ExtractTab from './components/tabs/ExtractTab';
 import OrganogramaTab from './components/tabs/OrganogramaTab';
+import TracksTab from './components/tabs/TracksTab';
 import { AnalystModal } from './components/modals/AnalystModal';
 import { SystemModal } from './components/modals/SystemModal';
 import { FieldModal } from './components/modals/FieldModal';
@@ -74,13 +78,103 @@ import { RoleModal } from './components/modals/RoleModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { DeleteRequestModal } from './components/modals/DeleteRequestModal';
 import { cn } from './lib/utils';
-import { Analyst, System, Access, AccessStatus, Track, Supervisor, FieldDefinition, User, Role, Permission, PERMISSIONS_LABELS, AccessRequest } from './types';
+import { Analyst, System, Access, AccessStatus, Track, Supervisor, FieldDefinition, User, Role, AccessRequest } from './types';
 import Login from './components/Login';
+import ResetPasswordRoute from './components/ResetPasswordRoute';
 import ChangePassword from './components/ChangePassword';
 import Footer from './components/Footer';
 import Toast, { ToastType } from './components/Toast';
-import { AppNotification } from './types';
+import { AppNotification, AppModule, AccessLevel, LEVEL_WEIGHTS } from './types';
 import NotificationModal from './components/NotificationModal';
+
+const mapLegacyPermissions = (perms: any): Record<AppModule, AccessLevel> => {
+  const defaultPerms: Record<AppModule, AccessLevel> = {
+    dashboard: 'none',
+    analysts: 'none',
+    systems: 'none',
+    requests: 'none',
+    approvals: 'none',
+    extract: 'none',
+    organogram: 'none',
+    tracks: 'none',
+    settings: 'none'
+  };
+
+  if (!perms) return defaultPerms;
+  
+  if (!Array.isArray(perms) && typeof perms === 'object') {
+    // If it's already the new format (checking keys)
+    if ('dashboard' in perms && ('analysts' in perms || 'systems' in perms)) {
+      return {
+        dashboard: perms.dashboard || 'none',
+        analysts: perms.analysts || 'none',
+        systems: perms.systems || 'none',
+        requests: perms.requests || 'none',
+        approvals: perms.approvals || 'none',
+        extract: perms.extract || 'none',
+        organogram: perms.organogram || 'none',
+        tracks: perms.tracks || 'none',
+        settings: perms.settings || 'none'
+      };
+    }
+    
+    // Older object format
+    const mapped = { ...defaultPerms };
+    const p = perms as Record<string, string>;
+    
+    if (p['analysts'] === 'read') mapped.analysts = 'read';
+    if (p['analysts'] === 'edit') mapped.analysts = 'edit';
+    
+    if (p['systems'] === 'read') mapped.systems = 'read';
+    if (p['systems'] === 'edit') mapped.systems = 'edit';
+    
+    if (p['access_requests'] === 'read') mapped.requests = 'read';
+    if (p['access_requests'] === 'edit') mapped.requests = 'edit';
+    
+    if (p['access_approvals'] === 'read') mapped.approvals = 'read';
+    if (p['access_approvals'] === 'edit') mapped.approvals = 'edit';
+    
+    if (p['organogram'] === 'read') mapped.organogram = 'read';
+    if (p['organogram'] === 'edit') mapped.organogram = 'edit';
+    
+    if (p['tracks'] === 'read') mapped.tracks = 'read';
+    if (p['tracks'] === 'edit') mapped.tracks = 'edit';
+    
+    if (p['extract_data'] === 'read' || p['extract_logs'] === 'read') mapped.extract = 'read';
+    
+    if (p['settings_fields'] === 'read' || p['settings_supervisors'] === 'read' || p['settings_users'] === 'read') mapped.settings = 'read';
+    if (p['settings_fields'] === 'edit' || p['settings_supervisors'] === 'edit' || p['settings_users'] === 'edit') mapped.settings = 'edit';
+
+    return mapped;
+  }
+
+  if (Array.isArray(perms)) {
+    const arrayPerms = perms as string[];
+    const mapped = { ...defaultPerms };
+    
+    if (arrayPerms.includes('systems_manage')) mapped.systems = 'edit';
+    else mapped.systems = 'read';
+    
+    if (arrayPerms.includes('analysts_manage') || arrayPerms.includes('analysts_access_status')) mapped.analysts = 'edit';
+    else mapped.analysts = 'read';
+    
+    if (arrayPerms.includes('request_access')) mapped.requests = 'edit';
+    if (arrayPerms.includes('approve_access')) mapped.approvals = 'edit';
+    if (arrayPerms.includes('extract_data') || arrayPerms.includes('extract_logs')) mapped.extract = 'read';
+    
+    if (arrayPerms.includes('settings_tracks')) mapped.tracks = 'edit';
+    else if (arrayPerms.includes('view_tracks')) mapped.tracks = 'read';
+    
+    if (arrayPerms.includes('settings_analyst_fields') || arrayPerms.includes('settings_supervisors') || arrayPerms.includes('settings_users') || arrayPerms.includes('settings_roles')) mapped.settings = 'edit';
+    
+    mapped.organogram = 'read';
+    mapped.dashboard = 'read';
+
+    return mapped;
+  }
+
+  return defaultPerms;
+};
 
 // Mock Initial Data
 const INITIAL_ANALYST_FIELDS: FieldDefinition[] = [
@@ -123,129 +217,7 @@ const INITIAL_ACCESSES: Access[] = [
   { analystId: '3', systemId: '5', status: 'Acesso perdido', updatedAt: new Date().toISOString() },
 ];
 
-const UserForm = ({ user, roles, onSave, onCancel, showToast }: { user: User | null, roles: Role[], onSave: (data: any) => Promise<void>, onCancel: () => void, showToast: (msg: string, type?: ToastType) => void }) => {
-  const [name, setName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [selectedRole, setSelectedRole] = useState<string>(user?.roleId || '');
-  const [permissions, setPermissions] = useState<Permission[]>(user?.permissions || []);
-  const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (selectedRole) {
-      const role = roles.find(r => r.id === selectedRole);
-      if (role) {
-        setPermissions(role.permissions);
-      }
-    }
-  }, [selectedRole, roles]);
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    
-    if (!name || !email) {
-      showToast("Erro: Nome e E-mail são obrigatórios.", "error");
-      return;
-    }
-    
-    setIsSaving(true);
-    try {
-      await onSave({ name, email, roleId: selectedRole, permissions });
-    } catch (err: any) {
-      console.error("Erro no handleSubmit:", err);
-      showToast("Erro ao salvar: " + err.message, "error");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <form key={user?.id || 'new_user'} onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Nome</label>
-        <input 
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required 
-          disabled={isSaving}
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50" 
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">E-mail</label>
-        <input 
-          type="email" 
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required 
-          disabled={isSaving}
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50" 
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Perfil de Acesso (Template)</label>
-        <select 
-          value={selectedRole} 
-          onChange={(e) => setSelectedRole(e.target.value)} 
-          disabled={isSaving}
-          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50"
-        >
-          <option value="">Personalizado</option>
-          {roles.map(role => (
-            <option key={role.id} value={role.id}>{role.name}</option>
-          ))}
-        </select>
-        <p className="text-[10px] text-slate-400 mt-1">Selecione um perfil para preencher as permissões automaticamente.</p>
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="font-bold text-slate-800 border-b border-slate-100 pb-2">Permissões do Usuário</h3>
-        {Object.entries(PERMISSIONS_LABELS).map(([key, label]) => (
-          <label key={key} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-100 transition-colors">
-            <input 
-              type="checkbox" 
-              checked={permissions.includes(key as Permission)}
-              disabled={isSaving}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setPermissions([...permissions, key as Permission]);
-                } else {
-                  setPermissions(permissions.filter(p => p !== key));
-                }
-                setSelectedRole(''); // Clear role selection if manually modified
-              }}
-              className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 disabled:opacity-50"
-            />
-            <span className="text-sm font-medium text-slate-700">{label}</span>
-          </label>
-        ))}
-      </div>
-
-      <div className="flex gap-3 pt-4">
-        <button 
-          type="button" 
-          onClick={onCancel} 
-          disabled={isSaving}
-          className="flex-1 px-4 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors disabled:opacity-50"
-        >
-          Cancelar
-        </button>
-        <button 
-          type="button" 
-          onClick={handleSubmit}
-          disabled={isSaving}
-          className="flex-1 px-4 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 disabled:opacity-50 flex items-center justify-center gap-2"
-        >
-          {isSaving ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Salvando...
-            </>
-          ) : 'Salvar'}
-        </button>
-      </div>
-    </form>
-  );
-};
 
 
 export default function App() {
@@ -253,6 +225,7 @@ export default function App() {
   const navigate = useNavigate();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isUsersLoaded, setIsUsersLoaded] = useState(false);
 
   const activeTab = useMemo(() => {
     const path = decodeURIComponent(location.pathname.substring(1));
@@ -264,7 +237,9 @@ export default function App() {
     if (path === 'Aprovacoes') return 'approvals';
     if (path === 'Extracao') return 'extract';
     if (path === 'Organograma') return 'organogram';
+    if (path === 'Esteiras') return 'tracks';
     if (path === 'Configuracoes') return 'settings';
+    if (path === 'Permissoes') return 'access_control';
     return 'dashboard';
   }, [location.pathname]);
 
@@ -278,7 +253,9 @@ export default function App() {
       'approvals': '/Aprovacoes',
       'extract': '/Extracao',
       'organogram': '/Organograma',
-      'settings': '/Configuracoes'
+      'tracks': '/Esteiras',
+      'settings': '/Configuracoes',
+      'access_control': '/Permissoes'
     };
     navigate(paths[tab] || '/');
   };
@@ -432,17 +409,54 @@ export default function App() {
 
   const notifiedRequestIdsRef = useRef<Set<string>>(new Set());
 
+  const currentUserData = users.find(u => u.id === user?.uid);
+  
+  const getEffectivePermission = (module: AppModule): AccessLevel => {
+    // Admin check
+    if (currentUserData?.roleId === 'admin' || currentUserData?.roleIds?.includes('admin')) return 'edit';
+    
+    let maxLevel: AccessLevel = 'none';
+    let maxWeight = 0;
+
+    const userRoles = currentUserData?.roleIds || (currentUserData?.roleId ? [currentUserData.roleId] : []);
+
+    for (const roleId of userRoles) {
+      const role = roles.find(r => r.id === roleId);
+      const rolePerms = mapLegacyPermissions(role?.permissions);
+      const level = rolePerms[module];
+      if (level) {
+        const weight = LEVEL_WEIGHTS[level];
+        if (weight > maxWeight) {
+          maxWeight = weight;
+          maxLevel = level;
+        }
+      }
+    }
+
+    // Also consider legacy direct user permissions
+    const userPerms = mapLegacyPermissions(currentUserData?.permissions);
+    if (userPerms[module]) {
+      const level = userPerms[module];
+      const weight = LEVEL_WEIGHTS[level];
+      if (weight > maxWeight) {
+        maxWeight = weight;
+        maxLevel = level;
+      }
+    }
+
+    return maxLevel;
+  };
+
+  const hasPermission = (module: AppModule, requiredLevel: AccessLevel = 'read') => {
+    const effective = getEffectivePermission(module);
+    return LEVEL_WEIGHTS[effective] >= LEVEL_WEIGHTS[requiredLevel];
+  };
+
   // Notification Handler
   useEffect(() => {
     if (!user || requests.length === 0) return;
 
-    const currentUserData = users.find(u => u.id === user?.uid);
-    const userRole = roles.find(r => r.id === currentUserData?.roleId);
-    const permissions = [...(userRole?.permissions || []), ...(currentUserData?.permissions || [])];
-    if (currentUserData?.roleId === 'admin') {
-      permissions.push('approve_access'); // Ensure admin has implicit perm
-    }
-    const hasApprovePermission = permissions.includes('approve_access');
+    const hasApprovePermission = hasPermission('approvals', 'edit') || hasPermission('approvals', 'edit_approval');
 
     if (isInitialLoadRef.current) {
       // First time loading requests, don't notify but populate the set
@@ -463,10 +477,10 @@ export default function App() {
           body = isUpdate 
             ? `A solicitação ${req.requestNumber} foi ajustada por ${req.requestedByName}.`
             : `Solicitação ${req.requestNumber} de ${req.requestedByName} aguardando aprovação.`;
-        } else if (req.status !== 'pending' && req.requestedBy === user?.uid) {
+        } else if (req.status === 'rejected' && req.requestedBy === user?.uid) {
           shouldNotify = true;
-          title = req.status === 'approved' ? 'Solicitação Aprovada' : 'Solicitação Reprovada';
-          body = `Sua solicitação ${req.requestNumber} foi ${req.status === 'approved' ? 'aprovada' : 'reprovada'}.`;
+          title = 'Solicitação Reprovada';
+          body = `Sua solicitação ${req.requestNumber} foi reprovada.`;
         }
 
         if (shouldNotify) {
@@ -510,9 +524,9 @@ export default function App() {
       }
 
       // Action on Request (Notify Requester OR Admin)
-      if ((req.status === 'rejected' || req.status === 'approved') && (req.requestedBy === user?.uid || hasApprovePermission)) {
-        metadata.title = req.status === 'approved' ? 'Solicitação Aprovada' : 'Solicitação Reprovada';
-        metadata.body = `A solicitação ${req.requestNumber} foi ${req.status === 'approved' ? 'aprovada' : 'reprovada'}.`;
+      if (req.status === 'rejected' && (req.requestedBy === user?.uid || hasApprovePermission)) {
+        metadata.title = 'Solicitação Reprovada';
+        metadata.body = `A solicitação ${req.requestNumber} foi reprovada.`;
       }
 
       if (metadata.title) {
@@ -720,6 +734,8 @@ export default function App() {
           }
         } catch (error) {
           console.error("Erro no listener de usuários:", error);
+        } finally {
+          setIsUsersLoaded(true);
         }
       }),
       onValue(refs.roles, (snapshot) => {
@@ -734,35 +750,77 @@ export default function App() {
               {
                 id: 'admin',
                 name: 'Administrador Geral',
-                permissions: [
-                  'settings_analyst_fields',
-                  'settings_system_fields',
-                  'settings_tracks',
-                  'systems_manage',
-                  'analysts_manage',
-                  'analysts_access_status',
-                  'request_access',
-                  'approve_access',
-                  'extract_data'
-                ],
+                permissions: {
+                  dashboard: 'edit',
+                  analysts: 'edit',
+                  systems: 'edit',
+                  requests: 'edit',
+                  approvals: 'edit',
+                  extract: 'edit',
+                  organogram: 'edit',
+                  tracks: 'edit',
+                  settings: 'edit',
+                  settings_analysts: 'edit',
+                  settings_systems: 'edit',
+                  settings_supervisors: 'edit'
+                },
                 isSystem: true
               },
               {
                 id: 'supervisor',
                 name: 'Supervisor',
-                permissions: ['analysts_access_status', 'approve_access'],
+                permissions: {
+                  dashboard: 'read',
+                  analysts: 'edit',
+                  systems: 'read',
+                  requests: 'read',
+                  approvals: 'edit',
+                  extract: 'read',
+                  organogram: 'read',
+                  tracks: 'read',
+                  settings: 'read',
+                  settings_analysts: 'none',
+                  settings_systems: 'none',
+                  settings_supervisors: 'none'
+                },
                 isSystem: true
               },
               {
                 id: 'treinador',
                 name: 'Treinador',
-                permissions: ['analysts_access_status'],
+                permissions: {
+                  dashboard: 'read',
+                  analysts: 'edit_approval',
+                  systems: 'none',
+                  requests: 'read',
+                  approvals: 'none',
+                  extract: 'none',
+                  organogram: 'read',
+                  tracks: 'read',
+                  settings: 'none',
+                  settings_analysts: 'none',
+                  settings_systems: 'none',
+                  settings_supervisors: 'none'
+                },
                 isSystem: true
               },
               {
                 id: 'requester',
                 name: 'Solicitante',
-                permissions: ['request_access'],
+                permissions: {
+                  dashboard: 'read',
+                  analysts: 'read',
+                  systems: 'none',
+                  requests: 'edit',
+                  approvals: 'none',
+                  extract: 'none',
+                  organogram: 'read',
+                  tracks: 'none',
+                  settings: 'none',
+                  settings_analysts: 'none',
+                  settings_systems: 'none',
+                  settings_supervisors: 'none'
+                },
                 isSystem: true
               }
             ];
@@ -1137,7 +1195,7 @@ export default function App() {
 
   const handleRequestAccess = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!hasPermission('request_access')) return;
+    if (!hasPermission('requests', 'edit_approval') && !hasPermission('requests', 'edit')) return;
     
     if (selectedSystemsInForm.length === 0) {
       showToast("Selecione pelo menos um sistema.", "error");
@@ -1248,7 +1306,7 @@ export default function App() {
   };
 
   const handleApproveRequest = async (request: AccessRequest) => {
-    if (!hasPermission('approve_access') || isProcessingApproval) return;
+    if (!hasPermission('approvals', 'edit') || isProcessingApproval) return;
     
     setIsProcessingApproval(true);
     try {
@@ -1405,7 +1463,7 @@ export default function App() {
   };
 
   const handleRejectRequest = async (requestId: string, reason: string) => {
-    if (!hasPermission('approve_access') || isProcessingApproval) return;
+    if (!hasPermission('approvals', 'edit') || isProcessingApproval) return;
     
     if (!reason || !reason.trim()) {
       showToast("O motivo da rejeição é obrigatório.", "error");
@@ -1488,7 +1546,7 @@ export default function App() {
 
 
   const deleteAnalyst = (id: string) => {
-    if (!canManageAnalysts) return;
+    if (!hasPermission('analysts', 'edit')) return;
     const analyst = allAnalysts.find(a => a.id === id);
     if (analyst?.deactivatedAt) {
       showToast("Analistas desligados não podem ser excluídos.", "error");
@@ -1551,7 +1609,7 @@ export default function App() {
   };
 
   const deleteTrack = (track: Track) => {
-    if (!hasPermission('settings_tracks')) return;
+    if (!hasPermission('tracks', 'edit')) return;
     setConfirmModal({
       isOpen: true,
       title: 'Excluir Esteira',
@@ -1579,7 +1637,7 @@ export default function App() {
   };
 
   const deleteSupervisor = (supervisor: Supervisor) => {
-    if (!hasPermission('settings_supervisors')) return;
+    if (!hasPermission('settings', 'edit')) return;
     setConfirmModal({
       isOpen: true,
       title: 'Excluir Supervisor',
@@ -1606,17 +1664,17 @@ export default function App() {
     });
   };
 
-  const handleAddUser = async (userData: { name: string, email: string, roleId: string, permissions: Permission[] }) => {
-    if (!hasPermission('settings_users')) {
+  const handleAddUser = async (userData: { name: string, email: string, roleIds: string[] }) => {
+    if (!hasPermission('settings', 'edit')) {
       showToast("Erro: Você não tem permissão para realizar esta ação.", "error");
       return;
     }
     
-    const { name, email, roleId, permissions } = userData;
+    const { name, email, roleIds } = userData;
 
     if (editingUser) {
       try {
-        const newData = { name, email, roleId, permissions };
+        const newData = { name, email, roleIds };
         await update(ref(db, `users/${editingUser.id}`), newData);
         if (user?.email) {
           await logAction(
@@ -1649,8 +1707,7 @@ export default function App() {
           id: uid, 
           name, 
           email, 
-          roleId, 
-          permissions, 
+          roleIds, 
           mustChangePassword: true 
         });
         
@@ -1685,12 +1742,11 @@ export default function App() {
     }
   };
 
-  const handleAddRole = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddRole = (e: React.FormEvent<HTMLFormElement>, rolePermissions: Record<AppModule, AccessLevel>) => {
     e.preventDefault();
-    if (!hasPermission('settings_roles')) return;
+    if (!hasPermission('settings', 'edit')) return;
     const formData = new FormData(e.currentTarget);
-    const name = formData.get('name') as string;
-    const permissions = Array.from(formData.getAll('permissions')) as Permission[];
+    const name = editingRole?.isSystem ? editingRole.name : formData.get('name') as string;
 
     if (editingRole) {
       const affectedUsers = users.filter(u => u.roleId === editingRole.id);
@@ -1702,7 +1758,7 @@ export default function App() {
               confirmText: 'Confirmar',
               confirmColor: 'bg-indigo-600',
               onConfirm: () => {
-                  const newData = { name, permissions };
+                  const newData = { name, permissions: rolePermissions };
                   update(ref(db, `roles/${editingRole.id}`), newData);
                   if (user?.email) {
                     logAction(
@@ -1722,7 +1778,7 @@ export default function App() {
           return;
       }
       
-      const newData = { name, permissions };
+      const newData = { name, permissions: rolePermissions };
       update(ref(db, `roles/${editingRole.id}`), newData);
       if (user?.email) {
         logAction(
@@ -1737,7 +1793,7 @@ export default function App() {
       setEditingRole(null);
     } else {
       const id = crypto.randomUUID();
-      set(ref(db, `roles/${id}`), { id, name, permissions, isSystem: false });
+      set(ref(db, `roles/${id}`), { id, name, permissions: rolePermissions, isSystem: false });
       if (user?.email) {
         logAction(user.email, 'CREATE_ROLE', `Criou o perfil: ${name}`, 'Configurações');
       }
@@ -1746,7 +1802,7 @@ export default function App() {
   };
 
   const deleteUser = (id: string) => {
-      if (!hasPermission('settings_users')) return;
+      if (!hasPermission('settings', 'edit')) return;
       setConfirmModal({
           isOpen: true,
           title: 'Excluir Usuário',
@@ -1783,7 +1839,7 @@ export default function App() {
   };
 
   const resetUserPassword = (id: string) => {
-      if (!hasPermission('settings_users')) return;
+      if (!hasPermission('settings', 'edit')) return;
       setConfirmModal({
           isOpen: true,
           title: 'Resetar Senha',
@@ -1822,7 +1878,7 @@ export default function App() {
   };
 
   const deleteRole = (role: Role) => {
-      if (!hasPermission('settings_roles')) return;
+      if (!hasPermission('settings', 'edit')) return;
       const assignedUsers = users.filter(u => u.roleId === role.id);
       if (assignedUsers.length > 0) {
           showToast(`Não é possível excluir este perfil pois existem ${assignedUsers.length} usuários vinculados a ele.`, "error");
@@ -2131,8 +2187,8 @@ export default function App() {
     selectedColumns?: string[],
     statusFilter: 'all' | 'active' | 'deactivated' = 'all'
   ) => {
-    if (type === 'logs' && !hasPermission('extract_logs')) return;
-    if (type !== 'logs' && !hasPermission('extract_data')) return;
+    if (type === 'logs' && !hasPermission('extract', 'read')) return;
+    if (type !== 'logs' && !hasPermission('extract', 'read')) return;
     
     showToast("Preparando exportação...", "info");
     
@@ -2215,14 +2271,24 @@ export default function App() {
         case 'users':
           users.forEach(u => {
             const role = roles.find(r => r.id === u.roleId);
-            u.permissions.forEach(p => {
+            const perms = Object.entries(u.permissions || {}).filter(([_, level]) => level !== 'none');
+            if (perms.length === 0) {
               dataToExport.push({
                 Nome: u.name,
                 Email: u.email,
                 Perfil: role?.name || 'Personalizado',
-                Permissão: PERMISSIONS_LABELS[p] || p
+                Acesso: 'Nenhum'
               });
-            });
+            } else {
+              perms.forEach(([res, level]) => {
+                dataToExport.push({
+                  Nome: u.name,
+                  Email: u.email,
+                  Perfil: role?.name || 'Personalizado',
+                  Acesso: `${res} (${level})`
+                });
+              });
+            }
           });
           filename = 'base_usuarios';
           break;
@@ -2367,8 +2433,8 @@ export default function App() {
   };
 
   const deleteField = (type: 'analyst' | 'system', fieldId: string) => {
-    if (type === 'analyst' && !hasPermission('settings_analyst_fields')) return;
-    if (type === 'system' && !hasPermission('settings_system_fields')) return;
+    if (type === 'analyst' && !hasPermission('settings', 'edit')) return;
+    if (type === 'system' && !hasPermission('settings', 'edit')) return;
 
     setConfirmModal({
       isOpen: true,
@@ -2403,7 +2469,7 @@ export default function App() {
     });
   };
 
-  if (loading) {
+  if (loading || (user && !isUsersLoaded)) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-400">
         <div className="flex-1 flex items-center justify-center">
@@ -2414,36 +2480,24 @@ export default function App() {
     );
   }
 
-  const currentUserData = users.find(u => u.id === user?.uid);
-  
-  const hasPermission = (permission: Permission) => {
-    if (currentUserData?.roleId === 'admin') return true;
-    const userRole = roles.find(r => r.id === currentUserData?.roleId);
-    const rolePermissions = userRole?.permissions || [];
-    const userPermissions = currentUserData?.permissions || [];
-    return rolePermissions.includes(permission) || userPermissions.includes(permission);
-  };
-
-  const canManageAnalysts = hasPermission('analysts_manage');
-  const canManageAccess = hasPermission('analysts_access_status');
-  const canViewAnalysts = canManageAnalysts || canManageAccess;
-  const canManageSystems = hasPermission('systems_manage');
+  const canViewAnalysts = hasPermission('analysts', 'read');
   const isSupervisor = currentUserData?.roleId === 'supervisor' || roles.find(r => r.id === currentUserData?.roleId)?.name.toLowerCase() === 'supervisor';
 
-  const canViewSettings = hasPermission('settings_analyst_fields') || 
-                          hasPermission('settings_system_fields') || 
-                          hasPermission('settings_tracks') ||
-                          hasPermission('settings_supervisors') ||
-                          hasPermission('settings_users') ||
-                          hasPermission('settings_roles') ||
-                          isSupervisor;
+  const canViewSettings = hasPermission('settings', 'read') || hasPermission('settings_analysts', 'read') || hasPermission('settings_systems', 'read') || hasPermission('settings_supervisors', 'read') || isSupervisor;
+
+  const canViewAccessControl = currentUserData?.roleId === 'admin' || roles.some(r => r.id === currentUserData?.roleId && r.name.toLowerCase().includes('administrador'));
+
+  const canManageAnalysts = hasPermission('analysts', 'edit');
+  const canManageSystems = hasPermission('systems', 'edit');
+  const canManageAccess = hasPermission('analysts', 'edit');
 
   return (
     <Routes>
       <Route path="/Login" element={user ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/RedefinirSenha" element={<ResetPasswordRoute />} />
       <Route path="*" element={!user ? <Navigate to="/Login" replace /> : (
         <>
-          {currentUserData?.mustChangePassword ? (
+          {(currentUserData?.mustChangePassword === true || currentUserData?.mustChangePassword === 'true') ? (
             <ChangePassword userId={user?.uid || ''} />
           ) : (
             <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 overflow-x-hidden">
@@ -2557,7 +2611,7 @@ export default function App() {
             </button>
           )}
 
-          {hasPermission('request_access') && (
+          {hasPermission('requests', 'read') && (
             <button 
               onClick={() => { setActiveTab('request'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
@@ -2584,7 +2638,7 @@ export default function App() {
             </button>
           )}
 
-          {hasPermission('approve_access') && (
+          {hasPermission('approvals', 'read') && (
             <button 
               onClick={() => { setActiveTab('approvals'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
@@ -2611,7 +2665,7 @@ export default function App() {
             </button>
           )}
 
-          {hasPermission('extract_data') && (
+          {hasPermission('extract', 'read') && (
             <button 
               onClick={() => { setActiveTab('extract'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
@@ -2630,7 +2684,7 @@ export default function App() {
             </button>
           )}
 
-          {(isSupervisor || currentUserData?.roleId === 'admin') && (
+          {hasPermission('organogram', 'read') && (
             <button 
               onClick={() => { setActiveTab('organogram'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
@@ -2639,12 +2693,50 @@ export default function App() {
               )}
               title={!(isSidebarPinned || isSidebarHovered) ? "Organograma" : ""}
             >
-              <Users className="w-5 h-5 shrink-0" />
+              <GitBranch className="w-5 h-5 shrink-0" />
               <motion.span
                 animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Organograma
+              </motion.span>
+            </button>
+          )}
+
+          {hasPermission('tracks', 'read') && (
+            <button 
+              onClick={() => { setActiveTab('tracks'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+                activeTab === 'tracks' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
+              )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Esteiras" : ""}
+            >
+              <RouteIcon className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Esteiras
+              </motion.span>
+            </button>
+          )}
+
+          {canViewAccessControl && (
+            <button 
+              onClick={() => { setActiveTab('access_control'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
+                activeTab === 'access_control' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
+              )}
+              title={!(isSidebarPinned || isSidebarHovered) ? "Gestão de Permissões" : ""}
+            >
+              <ShieldCheck className="w-5 h-5 shrink-0" />
+              <motion.span
+                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                className="whitespace-nowrap overflow-hidden"
+              >
+                Gestão de Permissões
               </motion.span>
             </button>
           )}
@@ -2738,6 +2830,8 @@ export default function App() {
               {activeTab === 'request' && 'Solicitar Acesso'}
               {activeTab === 'approvals' && 'Aprovações Pendentes'}
               {activeTab === 'organogram' && 'Organograma'}
+              {activeTab === 'tracks' && 'Esteiras'}
+              {activeTab === 'access_control' && 'Gestão de Permissões'}
               {activeTab === 'settings' && 'Configurações'}
               {activeTab === 'extract' && 'Extração de Dados'}
             </h1>
@@ -2919,6 +3013,7 @@ export default function App() {
                 accesses={accesses}
                 systems={systems}
                 canManageAnalysts={canManageAnalysts}
+                canDeleteAnalyst={hasPermission('analysts', 'edit')}
                 canManageAccess={canManageAccess}
                 currentUserRole={currentUserData?.roleId}
                 deactivateAnalyst={deactivateAnalyst}
@@ -3016,6 +3111,34 @@ export default function App() {
                 getAnalystDisplayName={getAnalystDisplayName}
                 getAnalystEmail={getAnalystEmail}
                 getAnalystInitials={getAnalystInitials}
+                getAnalystTrack={getAnalystTrack}
+                tracks={tracks}
+              />
+            )}
+            {activeTab === 'tracks' && (
+              <TracksTab
+                tracks={tracks}
+                allAnalysts={allAnalysts}
+                getAnalystTrack={getAnalystTrack}
+                canEdit={hasPermission('tracks', 'edit')}
+              />
+            )}
+            {activeTab === 'access_control' && (
+              <AccessControlTab
+                hasPermission={hasPermission}
+                users={users}
+                userSearchQuery={userSearchQuery}
+                setUserSearchQuery={setUserSearchQuery}
+                usersLimit={usersLimit}
+                setUsersLimit={setUsersLimit}
+                setIsAddingUser={setIsAddingUser}
+                resetUserPassword={resetUserPassword}
+                setEditingUser={setEditingUser}
+                deleteUser={deleteUser}
+                roles={roles}
+                setIsAddingRole={setIsAddingRole}
+                setEditingRole={setEditingRole}
+                deleteRole={deleteRole}
               />
             )}
             {activeTab === 'settings' && (
@@ -3249,6 +3372,7 @@ export default function App() {
         )}
 
         <AnalystModal
+          key={editingAnalyst ? `edit-analyst-${editingAnalyst.id}` : (isAddingAnalyst ? 'add-new-analyst' : 'hidden-analyst')}
           isOpen={isAddingAnalyst || !!editingAnalyst}
           editingAnalyst={editingAnalyst}
           onClose={() => {
@@ -3260,6 +3384,7 @@ export default function App() {
           supervisors={mergedSupervisors}
           systems={systems}
           accesses={accesses}
+          hasPermission={hasPermission}
           canManageAnalysts={canManageAnalysts}
           canManageAccess={canManageAccess}
           user={currentUserData || null}
@@ -3270,6 +3395,7 @@ export default function App() {
         />
 
         <SystemModal
+          key={editingSystem ? `edit-system-${editingSystem.id}` : (isAddingSystem ? 'add-new-system' : 'hidden-system')}
           isOpen={isAddingSystem || !!editingSystem}
           editingSystem={editingSystem}
           onClose={() => {
@@ -3283,6 +3409,7 @@ export default function App() {
         />
 
         <FieldModal
+          key={editingField ? `edit-field-${editingField.type}-${editingField.field.id}` : (isAddingField ? 'add-new-field' : 'hidden-field')}
           isAddingField={isAddingField}
           editingField={editingField}
           onClose={() => {
@@ -3298,6 +3425,7 @@ export default function App() {
         />
 
         <TrackModal
+          key={editingTrack ? `edit-track-${editingTrack.id}` : (isAddingTrack ? 'add-new-track' : 'hidden-track')}
           isAddingTrack={isAddingTrack}
           editingTrack={editingTrack}
           onClose={() => {
@@ -3311,6 +3439,7 @@ export default function App() {
         />
 
         <SupervisorModal
+          key={editingSupervisor ? `edit-supervisor-${editingSupervisor.id}` : (isAddingSupervisor ? 'add-new-supervisor' : 'hidden-supervisor')}
           isAddingSupervisor={isAddingSupervisor}
           editingSupervisor={editingSupervisor}
           onClose={() => {
@@ -3323,6 +3452,7 @@ export default function App() {
         />
 
         <UserModal
+          key={editingUser ? `edit-user-${editingUser.id}` : (isAddingUser ? 'add-new-user' : 'hidden-user')}
           isAddingUser={isAddingUser}
           editingUser={editingUser}
           onClose={() => {
@@ -3335,6 +3465,7 @@ export default function App() {
         />
 
         <RoleModal
+          key={editingRole ? `edit-${editingRole.id}` : (isAddingRole ? 'add-new' : 'hidden')}
           isAddingRole={isAddingRole}
           editingRole={editingRole}
           onClose={() => {
@@ -3402,7 +3533,7 @@ export default function App() {
           getAnalystDisplayName={getAnalystDisplayName}
           getAnalystEmail={getAnalystEmail}
           getAnalystTrack={getAnalystTrack}
-          canApprove={hasPermission('approve_access')}
+          canApprove={hasPermission('approvals', 'edit')}
           currentUserUid={user?.uid || ''}
         />
 
