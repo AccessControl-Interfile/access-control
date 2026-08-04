@@ -5,38 +5,174 @@ export type AccessLevel = 'none' | 'read' | 'edit_approval' | 'edit';
 export type AppModule = 
   | 'dashboard'
   | 'analysts'
+  | 'analysts_new'
+  | 'analysts_import'
+  | 'analysts_mass_offboard'
+  | 'analysts_manage_access'
+  | 'analysts_offboard'
+  | 'analysts_edit'
+  | 'analysts_delete'
   | 'systems'
+  | 'systems_new'
+  | 'systems_edit'
+  | 'systems_delete'
   | 'requests'
   | 'approvals'
-  | 'extract'
+  | 'extract_analysts'
+  | 'extract_systems'
+  | 'extract_users'
+  | 'extract_tracks'
+  | 'extract_matrix'
+  | 'extract_logs'
   | 'organogram'
   | 'tracks'
-  | 'settings'
+  | 'access_control'
   | 'settings_analysts'
   | 'settings_systems'
-  | 'settings_supervisors';
+  | 'settings_tracks'
+  | 'settings_supervisors'
+  | 'settings_sound';
 
 export const MODULE_LABELS: Record<AppModule, string> = {
   dashboard: 'Dashboard',
   analysts: 'Analistas',
+  analysts_new: 'Novo analista',
+  analysts_import: 'Importação',
+  analysts_mass_offboard: 'Desligamento em massa',
+  analysts_manage_access: 'Gerenciar Acessos',
+  analysts_offboard: 'Desligar Analista',
+  analysts_edit: 'Editar (Analista)',
+  analysts_delete: 'Excluir (Analista)',
   systems: 'Sistemas',
+  systems_new: 'Novo (Sistema)',
+  systems_edit: 'Editar (Sistema)',
+  systems_delete: 'Excluir (Sistema)',
   requests: 'Solicitações',
   approvals: 'Aprovações',
-  extract: 'Extrair Base',
+  extract_analysts: 'Base de analistas',
+  extract_systems: 'Base de sistemas',
+  extract_users: 'Base de usuários',
+  extract_tracks: 'Base de esteiras',
+  extract_matrix: 'Matriz de acessos',
+  extract_logs: 'Logs',
   organogram: 'Organograma',
-  tracks: 'Gestão de Esteiras',
-  settings: 'Configurações',
+  tracks: 'Esteiras',
+  access_control: 'Gestão de permissões',
   settings_analysts: 'Definição de Analista',
   settings_systems: 'Definição de Sistema',
-  settings_supervisors: 'Gestão de Supervisores'
+  settings_tracks: 'Gestão de Esteiras',
+  settings_supervisors: 'Gestão de Supervisores',
+  settings_sound: 'Personalização de Som'
 };
 
 export const LEVEL_LABELS: Record<AccessLevel, string> = {
   none: 'Ocultar',
-  read: 'Leitura',
+  read: 'Ver',
   edit_approval: 'Editar mediante Aprovação',
-  edit: 'Leitura e Edição'
+  edit: 'Permitir/Editar'
 };
+
+export const MODULE_AVAILABLE_LEVELS: Record<AppModule, AccessLevel[]> = {
+  dashboard: ['none', 'read'],
+  analysts: ['none', 'read'],
+  analysts_new: ['none', 'edit_approval', 'edit'],
+  analysts_import: ['none', 'edit_approval', 'edit'],
+  analysts_mass_offboard: ['none', 'edit_approval', 'edit'],
+  analysts_manage_access: ['none', 'edit_approval', 'edit'],
+  analysts_offboard: ['none', 'edit_approval', 'edit'],
+  analysts_edit: ['none', 'edit_approval', 'edit'],
+  analysts_delete: ['none', 'edit_approval', 'edit'],
+  systems: ['none', 'read'],
+  systems_new: ['none', 'edit_approval', 'edit'],
+  systems_edit: ['none', 'edit_approval', 'edit'],
+  systems_delete: ['none', 'edit_approval', 'edit'],
+  requests: ['none', 'read', 'edit'],
+  approvals: ['none', 'read', 'edit'],
+  extract_analysts: ['none', 'read', 'edit'],
+  extract_systems: ['none', 'read', 'edit'],
+  extract_users: ['none', 'read', 'edit'],
+  extract_tracks: ['none', 'read', 'edit'],
+  extract_matrix: ['none', 'read', 'edit'],
+  extract_logs: ['none', 'read', 'edit'],
+  organogram: ['none', 'read', 'edit'],
+  tracks: ['none', 'edit_approval', 'edit'],
+  access_control: ['none', 'read', 'edit'],
+  settings_analysts: ['none', 'read', 'edit'],
+  settings_systems: ['none', 'read', 'edit'],
+  settings_tracks: ['none', 'read', 'edit'],
+  settings_supervisors: ['none', 'read', 'edit'],
+  settings_sound: ['none', 'read', 'edit']
+};
+
+export const MODULE_GROUPS = [
+  {
+    name: 'Dashboard',
+    modules: ['dashboard']
+  },
+  {
+    name: 'Analistas',
+    modules: [
+      'analysts',
+      'analysts_new',
+      'analysts_import',
+      'analysts_mass_offboard',
+      'analysts_manage_access',
+      'analysts_offboard',
+      'analysts_edit',
+      'analysts_delete'
+    ]
+  },
+  {
+    name: 'Sistemas',
+    modules: [
+      'systems',
+      'systems_new',
+      'systems_edit',
+      'systems_delete'
+    ]
+  },
+  {
+    name: 'Solicitações',
+    modules: ['requests']
+  },
+  {
+    name: 'Aprovações',
+    modules: ['approvals']
+  },
+  {
+    name: 'Extrair Bases',
+    modules: [
+      'extract_analysts',
+      'extract_systems',
+      'extract_users',
+      'extract_tracks',
+      'extract_matrix',
+      'extract_logs'
+    ]
+  },
+  {
+    name: 'Organograma',
+    modules: ['organogram']
+  },
+  {
+    name: 'Esteiras',
+    modules: ['tracks']
+  },
+  {
+    name: 'Gestão de permissões',
+    modules: ['access_control']
+  },
+  {
+    name: 'Configurações',
+    modules: [
+      'settings_analysts',
+      'settings_systems',
+      'settings_tracks',
+      'settings_supervisors',
+      'settings_sound'
+    ]
+  }
+];
 
 export const LEVEL_WEIGHTS: Record<AccessLevel, number> = {
   none: 0,
@@ -98,6 +234,10 @@ export interface FieldDefinition {
   order?: number;
   options?: string[];
   textCase?: 'uppercase' | 'lowercase' | 'any';
+  typeRestriction?: 'all' | 'letters_only' | 'numbers_only';
+  allowAccents?: boolean;
+  allowSpecialChars?: boolean;
+  allowSpecialLetters?: boolean;
 }
 
 export interface Analyst {
@@ -122,7 +262,7 @@ export interface Access {
 export interface AccessRequest {
   id: string;
   requestNumber: string;
-  type?: 'new_analyst' | 'status_change' | 'edit_analyst';
+  type?: 'new_analyst' | 'status_change' | 'edit_analyst' | 'offboard_analyst' | 'delete_analyst';
   analystData?: Partial<Analyst>;
   previousAnalystData?: Partial<Analyst>;
   systemIds?: string[];

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Users, Monitor, ShieldCheck, ChevronRight, CheckCircle2, FileText, Check, Download, AlertCircle, Settings2, X, Info } from 'lucide-react';
-import { FieldDefinition } from '../../types';
+import { FieldDefinition, AppModule, AccessLevel } from '../../types';
 import { cn } from '../../lib/utils';
 
 interface ExtractTabProps {
   key?: string;
   handleExportData: (type: 'analysts' | 'systems' | 'users' | 'tracks' | 'accesses' | 'logs', columns?: string[], status?: 'all' | 'active' | 'deactivated') => void;
-  hasPermission: (permission: string) => boolean;
+  hasPermission: (module: AppModule, level?: AccessLevel) => boolean;
   logExportAllTime: boolean;
   setLogExportAllTime: (allTime: boolean) => void;
   logExportStartDate: string;
@@ -105,80 +105,90 @@ export default function ExtractTab({
         </div>
         
         <div className="p-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <button 
-            onClick={() => openColumnModal('analysts')}
-            className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4 relative overflow-hidden"
-          >
-            <div className="absolute right-4 top-4 text-slate-300 opacity-20 group-hover:opacity-100 transition-opacity">
-              <Settings2 className="w-5 h-5" />
-            </div>
-            <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800">Base de Analistas</h3>
-              <p className="text-xs text-slate-500 line-clamp-1">Personalize colunas e filtros.</p>
-            </div>
-          </button>
-
-          <button 
-            onClick={() => handleExportData('systems')}
-            className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-          >
-            <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-              <Monitor className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800">Base de Sistemas</h3>
-              <p className="text-xs text-slate-500 line-clamp-1">Lista de sistemas e campos técnicos.</p>
-            </div>
-          </button>
-
-          <button 
-            onClick={() => handleExportData('users', undefined, statusFilter)}
-            className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-          >
-            <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800">Base de Usuários</h3>
-              <p className="text-xs text-slate-500 line-clamp-1">Usuários administrativos e operacionais.</p>
-            </div>
-          </button>
-
-          <button 
-            onClick={() => handleExportData('tracks')}
-            className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
-          >
-            <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-              <ChevronRight className="w-6 h-6" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-800">Base de Esteiras</h3>
-              <p className="text-xs text-slate-500 line-clamp-1">Lista de todas as esteiras cadastradas.</p>
-            </div>
-          </button>
-
-          <div className="sm:col-span-2">
+          {hasPermission('extract_analysts', 'read') && (
             <button 
-              onClick={() => openColumnModal('accesses')}
-              className="w-full group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4 relative overflow-hidden"
+              onClick={() => openColumnModal('analysts')}
+              className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4 relative overflow-hidden"
             >
               <div className="absolute right-4 top-4 text-slate-300 opacity-20 group-hover:opacity-100 transition-opacity">
                 <Settings2 className="w-5 h-5" />
               </div>
               <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                <CheckCircle2 className="w-6 h-6" />
+                <Users className="w-6 h-6" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-slate-800">Matriz de Acessos</h3>
-                <p className="text-xs text-slate-500">Relatório completo de qual analista tem acesso a qual sistema. Personalize as colunas de dados do analista.</p>
+              <div>
+                <h3 className="font-bold text-slate-800">Base de Analistas</h3>
+                <p className="text-xs text-slate-500 line-clamp-1">Personalize colunas e filtros.</p>
               </div>
             </button>
-          </div>
+          )}
 
-          {hasPermission('extract_logs') && (
+          {hasPermission('extract_systems', 'read') && (
+            <button 
+              onClick={() => handleExportData('systems')}
+              className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
+            >
+              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                <Monitor className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Base de Sistemas</h3>
+                <p className="text-xs text-slate-500 line-clamp-1">Lista de sistemas e campos técnicos.</p>
+              </div>
+            </button>
+          )}
+
+          {hasPermission('extract_users', 'read') && (
+            <button 
+              onClick={() => handleExportData('users', undefined, statusFilter)}
+              className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
+            >
+              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Base de Usuários</h3>
+                <p className="text-xs text-slate-500 line-clamp-1">Usuários administrativos e operacionais.</p>
+              </div>
+            </button>
+          )}
+
+          {hasPermission('extract_tracks', 'read') && (
+            <button 
+              onClick={() => handleExportData('tracks')}
+              className="group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4"
+            >
+              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                <ChevronRight className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Base de Esteiras</h3>
+                <p className="text-xs text-slate-500 line-clamp-1">Lista de todas as esteiras cadastradas.</p>
+              </div>
+            </button>
+          )}
+
+          {hasPermission('extract_matrix', 'read') && (
+            <div className="sm:col-span-2">
+              <button 
+                onClick={() => openColumnModal('accesses')}
+                className="w-full group p-6 bg-slate-50 rounded-3xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all text-left flex items-center gap-4 relative overflow-hidden"
+              >
+                <div className="absolute right-4 top-4 text-slate-300 opacity-20 group-hover:opacity-100 transition-opacity">
+                  <Settings2 className="w-5 h-5" />
+                </div>
+                <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-800">Matriz de Acessos</h3>
+                  <p className="text-xs text-slate-500">Relatório completo de qual analista tem acesso a qual sistema. Personalize as colunas de dados do analista.</p>
+                </div>
+              </button>
+            </div>
+          )}
+
+          {hasPermission('extract_logs', 'read') && (
             <div className="col-span-full mt-4 p-6 bg-indigo-50/50 rounded-[2rem] border border-indigo-100">
               <div className="flex flex-col md:flex-row md:items-end gap-6">
                 <div className="flex-1 space-y-4">

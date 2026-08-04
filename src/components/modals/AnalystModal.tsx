@@ -25,6 +25,43 @@ interface AnalystModalProps {
   showToast: (message: string, type: 'success' | 'error' | 'info') => void;
 }
 
+const applyFieldRestrictions = (
+  input: HTMLInputElement, 
+  field: { 
+    typeRestriction?: 'all' | 'letters_only' | 'numbers_only', 
+    allowAccents?: boolean, 
+    allowSpecialChars?: boolean, 
+    allowSpecialLetters?: boolean, 
+    textCase?: 'uppercase' | 'lowercase' | 'any' 
+  }
+) => {
+  let val = input.value;
+
+  if (field.allowSpecialLetters === false) {
+    // Remove non-standard letters like ç, ñ, ß, æ, œ
+    val = val.replace(/[çÇñÑßæÆœŒ]/g, '');
+  }
+
+  if (field.allowAccents === false) {
+    val = val.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  if (field.typeRestriction === 'letters_only') {
+    val = val.replace(/[0-9]/g, '');
+  } else if (field.typeRestriction === 'numbers_only') {
+    val = val.replace(/[^0-9]/g, '');
+  }
+
+  if (field.allowSpecialChars === false) {
+    val = val.replace(/[^\p{L}\p{N}\s]/gu, '');
+  }
+
+  if (field.textCase === 'uppercase') val = val.toUpperCase();
+  else if (field.textCase === 'lowercase') val = val.toLowerCase();
+
+  input.value = val;
+};
+
 export const AnalystModal: React.FC<AnalystModalProps> = ({
   isOpen,
   editingAnalyst,
@@ -143,12 +180,22 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
 
   if (!isOpen) return null;
 
-  const canEdit = hasPermission('analysts', 'edit') || hasPermission('analysts', 'edit_approval');
-  const needsApproval = hasPermission('analysts', 'edit_approval') && !hasPermission('analysts', 'edit');
+  const isEditing = !!editingAnalyst;
+  const canDirectlyEdit = hasPermission('analysts_edit', 'edit');
+  const canRequestEdit = hasPermission('analysts_edit', 'edit_approval');
+  const canDirectlyCreate = hasPermission('analysts_new', 'edit');
+  const canRequestCreate = hasPermission('analysts_new', 'edit_approval');
+  
+  const canEdit = isEditing 
+    ? (canDirectlyEdit || canRequestEdit)
+    : (canDirectlyCreate || canRequestCreate);
+  const needsApproval = isEditing 
+    ? (canRequestEdit && !canDirectlyEdit)
+    : (canRequestCreate && !canDirectlyCreate);
 
   const handleAddAnalyst = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!canEdit && !canManageAccess) return;
+    if (!canEdit && !hasPermission('analysts_manage_access', 'edit') && !hasPermission('analysts_manage_access', 'edit_approval')) return;
     const formData = new FormData(e.currentTarget);
     
     const analystData: any = {};
@@ -207,7 +254,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
           );
         }
         showToast(`Solicitação de edição (${requestNumber}) enviada para aprovação.`, "success");
-      } else if (canManageAnalysts && analystFieldsChanged) {
+      } else if (canDirectlyEdit && analystFieldsChanged) {
         await update(ref(db, `analysts/${editingAnalyst.id}`), analystData);
         if (user?.email) {
           await logAction(
@@ -221,14 +268,45 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
         }
         showToast("Analista atualizado com sucesso!", "success");
       }
-    } else if (canManageAnalysts) {
-      analystId = crypto.randomUUID();
-      const createdAt = new Date().toISOString();
-      await set(ref(db, `analysts/${analystId}`), { ...analystData, id: analystId, createdAt });
-      if (user?.email) {
-        await logAction(user.email, 'CREATE_ANALYST', `Criou analista: ${getAnalystDisplayName(analystData)}`, 'Analistas');
+    } else {
+      if (needsApproval) {
+        const requestId = Math.random().toString(36).substring(2, 15);
+        const requestNumber = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+        const requestData: AccessRequest = {
+          id: requestId,
+          requestNumber,
+          type: 'new_analyst',
+          status: 'pending',
+          requestedBy: user?.id || '',
+          requestedByName: user?.name || user?.email || 'Usuário',
+          requestedAt: new Date().toISOString(),
+          analystData: analystData,
+          systemIds: selectedSystemsInForm
+        };
+
+        await set(ref(db, `requests/${requestId}`), requestData);
+        if (user?.email) {
+          await logAction(
+            user.email,
+            'CREATE_REQUEST',
+            `Solicitou criação do novo analista: ${getAnalystDisplayName(analystData)}`,
+            'Solicitações',
+            null,
+            requestData
+          );
+        }
+        showToast(`Solicitação de novo analista (${requestNumber}) enviada para aprovação.`, "success");
+        onClose();
+        return;
+      } else if (canDirectlyCreate) {
+        analystId = crypto.randomUUID();
+        const createdAt = new Date().toISOString();
+        await set(ref(db, `analysts/${analystId}`), { ...analystData, id: analystId, createdAt });
+        if (user?.email) {
+          await logAction(user.email, 'CREATE_ANALYST', `Criou analista: ${getAnalystDisplayName(analystData)}`, 'Analistas');
+        }
+        showToast("Analista criado com sucesso!", "success");
       }
-      showToast("Analista criado com sucesso!", "success");
     }
 
     // Update Accesses - "gerenciar sistemas não precisa gerar requisição"
@@ -332,8 +410,13 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         disabled={!canEdit} 
                         onInput={(e) => {
                           const input = e.target as HTMLInputElement;
-                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
-                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                          applyFieldRestrictions(input, {
+                            ...field,
+                            allowAccents: false,
+                            allowSpecialLetters: false,
+                            allowSpecialChars: false,
+                            typeRestriction: 'letters_only'
+                          });
                         }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder="Ex: João Silva" 
@@ -349,8 +432,13 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         disabled={!canEdit} 
                         onInput={(e) => {
                           const input = e.target as HTMLInputElement;
-                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
-                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                          applyFieldRestrictions(input, {
+                            ...field,
+                            allowAccents: false,
+                            allowSpecialLetters: false,
+                            allowSpecialChars: true,
+                            typeRestriction: 'all'
+                          });
                         }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder="joao.silva@empresa.com" 
@@ -389,8 +477,7 @@ export const AnalystModal: React.FC<AnalystModalProps> = ({
                         required
                         onInput={(e) => {
                           const input = e.target as HTMLInputElement;
-                          if (field.textCase === 'uppercase') input.value = input.value.toUpperCase();
-                          else if (field.textCase === 'lowercase') input.value = input.value.toLowerCase();
+                          applyFieldRestrictions(input, field);
                         }}
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-60" 
                         placeholder={field.description}

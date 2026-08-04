@@ -67,7 +67,7 @@ export default function AccessControlTab({
                   className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all w-full sm:w-64"
                 />
               </div>
-              {hasPermission('settings', 'edit') && (
+              {hasPermission('access_control', 'edit') && (
                 <button 
                   onClick={() => setIsAddingUser(true)}
                   className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
@@ -80,10 +80,11 @@ export default function AccessControlTab({
           <div className="p-6 flex-1 bg-slate-50/50">
             <div className="space-y-3">
               {users
-                .filter(user => 
-                  user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                  user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
-                )
+                .filter(user => {
+                  const query = (userSearchQuery || '').toLowerCase();
+                  return (user.name || '').toLowerCase().includes(query) || 
+                         (user.email || '').toLowerCase().includes(query);
+                })
                 .slice(0, usersLimit)
                 .map(user => {
                   const userRoles = roles.filter(r => user.roleIds?.includes(r.id) || user.roleId === r.id);
@@ -94,7 +95,7 @@ export default function AccessControlTab({
                           <p className="font-bold text-slate-800 text-lg">{user.name}</p>
                           <p className="text-sm text-slate-500">{user.email}</p>
                         </div>
-                        {hasPermission('settings', 'edit') && (
+                        {hasPermission('access_control', 'edit') && (
                           <div className="flex gap-1 bg-slate-50 p-1 rounded-xl border border-slate-100">
                             <button 
                               onClick={() => resetUserPassword(user.id)}
@@ -140,16 +141,18 @@ export default function AccessControlTab({
                   <p className="text-slate-400">Nenhum usuário cadastrado.</p>
                 </div>
               )}
-              {users.length > 0 && users.filter(user => 
-                user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
-              ).length === 0 && (
+              {users.length > 0 && users.filter(user => {
+                  const query = (userSearchQuery || '').toLowerCase();
+                  return (user.name || '').toLowerCase().includes(query) || 
+                         (user.email || '').toLowerCase().includes(query);
+                }).length === 0 && (
                 <p className="text-center text-slate-400 py-4">Nenhum usuário encontrado para a busca.</p>
               )}
-              {users.filter(user => 
-                user.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                user.email.toLowerCase().includes(userSearchQuery.toLowerCase())
-              ).length > usersLimit && (
+              {users.filter(user => {
+                  const query = (userSearchQuery || '').toLowerCase();
+                  return (user.name || '').toLowerCase().includes(query) || 
+                         (user.email || '').toLowerCase().includes(query);
+                }).length > usersLimit && (
                 <div className="flex justify-center mt-4 pt-4">
                   <button 
                     onClick={() => setUsersLimit(prev => prev + 10)}
@@ -173,7 +176,7 @@ export default function AccessControlTab({
               </h3>
               <p className="text-sm text-slate-500">Administre os perfis de acesso.</p>
             </div>
-            {hasPermission('settings', 'edit') && (
+            {hasPermission('access_control', 'edit') && (
               <button 
                 onClick={() => setIsAddingRole(true)}
                 className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
@@ -205,7 +208,7 @@ export default function AccessControlTab({
                           )}
                         </h4>
                       </div>
-                      {hasPermission('settings', 'edit') && (
+                      {hasPermission('access_control', 'edit') && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-50 p-1 rounded-xl border border-slate-100">
                           <button 
                             onClick={() => { setEditingRole(role); setIsAddingRole(true); }}

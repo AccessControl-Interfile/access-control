@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Role, AppModule, AccessLevel, MODULE_LABELS, LEVEL_LABELS } from '../../types';
+import { Role, AppModule, AccessLevel, MODULE_LABELS, LEVEL_LABELS, MODULE_GROUPS, MODULE_AVAILABLE_LEVELS } from '../../types';
 
 interface RoleModalProps {
   isAddingRole: boolean;
@@ -8,10 +8,6 @@ interface RoleModalProps {
   onClose: () => void;
   handleAddRole: (e: React.FormEvent<HTMLFormElement>, rolePermissions: Record<AppModule, AccessLevel>) => void;
 }
-
-const MODULES: AppModule[] = [
-  'dashboard', 'analysts', 'systems', 'requests', 'approvals', 'extract', 'organogram', 'tracks', 'settings', 'settings_analysts', 'settings_systems', 'settings_supervisors'
-];
 
 const LEVELS: AccessLevel[] = ['none', 'read', 'edit_approval', 'edit'];
 
@@ -21,10 +17,15 @@ export const RoleModal: React.FC<RoleModalProps> = ({
   onClose,
   handleAddRole
 }) => {
-  const defaultPerms = React.useMemo(() => MODULES.reduce((acc, m) => {
-    acc[m] = 'none';
-    return acc;
-  }, {} as Record<AppModule, AccessLevel>), []);
+  const defaultPerms = React.useMemo(() => {
+    const acc: Partial<Record<AppModule, AccessLevel>> = {};
+    MODULE_GROUPS.forEach(group => {
+      group.modules.forEach(m => {
+        acc[m as AppModule] = 'none';
+      });
+    });
+    return acc as Record<AppModule, AccessLevel>;
+  }, []);
 
   const [rolePermissions, setRolePermissions] = useState<Record<AppModule, AccessLevel>>({
     ...defaultPerms,
@@ -90,26 +91,50 @@ export const RoleModal: React.FC<RoleModalProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {MODULES.map((module) => (
-                      <tr key={module} className="hover:bg-slate-50/50 transition-colors group">
-                        <td className="p-4 border-b border-slate-100 font-medium text-slate-700 bg-white group-hover:bg-slate-50/50 sticky left-0 z-10 shadow-[1px_0_0_0_#f1f5f9]">
-                          {MODULE_LABELS[module]}
-                        </td>
-                        {LEVELS.map(level => (
-                          <td key={level} className="p-4 border-b border-slate-100 text-center">
-                            <label className="flex items-center justify-center cursor-pointer w-full h-full p-2">
-                              <input
-                                type="radio"
-                                name={`perm_${module}`}
-                                checked={rolePermissions[module] === level}
-                                onChange={() => setRolePermissions(prev => ({ ...prev, [module]: level }))}
-                                className="w-5 h-5 text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
-                              />
-                            </label>
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
+                    {MODULE_GROUPS.map((group) => {
+                      const showHeader = group.name === 'Extrair Bases' || group.name === 'Configurações';
+                      return (
+                      <React.Fragment key={group.name}>
+                        {showHeader && (
+                          <tr className="bg-slate-100">
+                             <td colSpan={LEVELS.length + 1} className="p-2 border-b border-slate-200 font-bold text-slate-800 sticky left-0 z-10 shadow-[1px_0_0_0_#e2e8f0]">
+                               {group.name}
+                             </td>
+                          </tr>
+                        )}
+                        {group.modules.map((module) => {
+                          const m = module as AppModule;
+                          const availableLevels = MODULE_AVAILABLE_LEVELS[m] || LEVELS;
+                          const isSubItem = showHeader || (group.modules.length > 1 && group.modules[0] !== m);
+                          
+                          return (
+                            <tr key={m} className="hover:bg-slate-50/50 transition-colors group">
+                              <td className={`p-4 border-b border-slate-100 font-medium text-slate-700 bg-white group-hover:bg-slate-50/50 sticky left-0 z-10 shadow-[1px_0_0_0_#f1f5f9] ${isSubItem ? 'pl-8 text-sm' : ''}`}>
+                                {isSubItem && <span className="text-slate-300 mr-2">└</span>}
+                                {MODULE_LABELS[m]}
+                              </td>
+                              {LEVELS.map(level => (
+                                <td key={level} className="p-4 border-b border-slate-100 text-center">
+                                  {availableLevels.includes(level) ? (
+                                    <label className="flex items-center justify-center cursor-pointer w-full h-full p-2">
+                                      <input
+                                        type="radio"
+                                        name={`perm_${m}`}
+                                        checked={rolePermissions[m] === level}
+                                        onChange={() => setRolePermissions(prev => ({ ...prev, [m]: level }))}
+                                        className="w-5 h-5 text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer disabled:opacity-50"
+                                      />
+                                    </label>
+                                  ) : (
+                                    <span className="text-slate-200 block text-center">-</span>
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    )})}
                   </tbody>
                 </table>
               </div>

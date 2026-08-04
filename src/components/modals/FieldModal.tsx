@@ -37,11 +37,21 @@ export const FieldModal: React.FC<FieldModalProps> = ({
   const [hasOptions, setHasOptions] = useState(false);
   const [options, setOptions] = useState<OptionItem[]>([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
   const [textCase, setTextCase] = useState<'uppercase' | 'lowercase' | 'any'>('any');
+  
+  // Validation settings for Analyst fields
+  const [typeRestriction, setTypeRestriction] = useState<'all' | 'letters_only' | 'numbers_only'>('all');
+  const [allowAccents, setAllowAccents] = useState(true);
+  const [allowSpecialChars, setAllowSpecialChars] = useState(true);
+  const [allowSpecialLetters, setAllowCedilla] = useState(true);
 
   useEffect(() => {
     if (editingField) {
       setHasOptions(!!editingField.field.options);
       setTextCase(editingField.field.textCase || 'any');
+      setTypeRestriction(editingField.field.typeRestriction || 'all');
+      setAllowAccents(editingField.field.allowAccents ?? true);
+      setAllowSpecialChars(editingField.field.allowSpecialChars ?? true);
+      setAllowCedilla(editingField.field.allowSpecialLetters ?? true);
       if (editingField.field.options) {
         setOptions(editingField.field.options.map(opt => ({ id: Math.random().toString(36).substr(2, 9), value: opt })));
       } else {
@@ -50,6 +60,10 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     } else {
       setHasOptions(false);
       setTextCase('any');
+      setTypeRestriction('all');
+      setAllowAccents(true);
+      setAllowSpecialChars(true);
+      setAllowCedilla(true);
       setOptions([{ id: Math.random().toString(36).substr(2, 9), value: '' }]);
     }
   }, [editingField, isAddingField]);
@@ -114,7 +128,10 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     }
 
     if (isAddingField?.type === 'analyst') {
-      const fieldData: FieldDefinition = { id, label, description, textCase };
+      const fieldData: FieldDefinition = { 
+        id, label, description, textCase,
+        typeRestriction, allowAccents, allowSpecialChars, allowSpecialLetters
+      };
       if (fieldOptions) fieldData.options = fieldOptions;
       const newFields = [...analystFields, fieldData];
       set(ref(db, 'config/analystFields'), newFields);
@@ -153,7 +170,10 @@ export const FieldModal: React.FC<FieldModalProps> = ({
     if (editingField.type === 'analyst') {
       const updated = analystFields.map(f => {
         if (f.id === editingField.field.id) {
-          const fieldData: FieldDefinition = { ...f, label, description, textCase };
+          const fieldData: FieldDefinition = { 
+            ...f, label, description, textCase,
+            typeRestriction, allowAccents, allowSpecialChars, allowSpecialLetters
+          };
           if (fieldOptions) {
             fieldData.options = fieldOptions;
           } else {
@@ -189,7 +209,7 @@ export const FieldModal: React.FC<FieldModalProps> = ({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[70vh] overflow-y-auto"
+          className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
         >
           <div className="p-8">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Novo Campo</h2>
@@ -267,6 +287,37 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {isAddingField.type === 'analyst' && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Restrição de Caracteres</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setTypeRestriction('all')} className={cn("flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all", typeRestriction === 'all' ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>Ambos</button>
+                      <button type="button" onClick={() => setTypeRestriction('letters_only')} className={cn("flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all", typeRestriction === 'letters_only' ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>Letras</button>
+                      <button type="button" onClick={() => setTypeRestriction('numbers_only')} className={cn("flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all", typeRestriction === 'numbers_only' ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>Números</button>
+                    </div>
+                  </div>
+                  
+                  {typeRestriction !== 'numbers_only' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={allowAccents} onChange={(e) => setAllowAccents(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                        <span className="text-sm font-medium text-slate-600">Permitir Acentos</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={allowSpecialLetters} onChange={(e) => setAllowCedilla(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                        <span className="text-sm font-medium text-slate-600">Permitir Letras Especiais</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={allowSpecialChars} onChange={(e) => setAllowSpecialChars(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                        <span className="text-sm font-medium text-slate-600">Caracteres Especiais</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 py-2">
                 <input 
                   type="checkbox" 
@@ -342,7 +393,7 @@ export const FieldModal: React.FC<FieldModalProps> = ({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
+          className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
         >
           <div className="p-8">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Editar Campo</h2>
@@ -408,6 +459,37 @@ export const FieldModal: React.FC<FieldModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              {editingField.type === 'analyst' && (
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Restrição de Caracteres</label>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setTypeRestriction('all')} className={cn("flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all", typeRestriction === 'all' ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>Ambos</button>
+                      <button type="button" onClick={() => setTypeRestriction('letters_only')} className={cn("flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all", typeRestriction === 'letters_only' ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>Letras</button>
+                      <button type="button" onClick={() => setTypeRestriction('numbers_only')} className={cn("flex-1 px-3 py-2 rounded-xl text-[10px] font-bold border transition-all", typeRestriction === 'numbers_only' ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-200" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>Números</button>
+                    </div>
+                  </div>
+                  
+                  {typeRestriction !== 'numbers_only' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={allowAccents} onChange={(e) => setAllowAccents(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                        <span className="text-sm font-medium text-slate-600">Permitir Acentos</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={allowSpecialLetters} onChange={(e) => setAllowCedilla(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                        <span className="text-sm font-medium text-slate-600">Permitir Letras Especiais</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={allowSpecialChars} onChange={(e) => setAllowSpecialChars(e.target.checked)} className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500" />
+                        <span className="text-sm font-medium text-slate-600">Caracteres Especiais</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 py-2">
                 <input 
                   type="checkbox" 

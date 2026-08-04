@@ -5,7 +5,7 @@ import {
   ShieldCheck, Power, Trash2, CheckCircle2, Clock, AlertCircle 
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { Analyst, Access, System, AccessStatus, FieldDefinition } from '../../types';
+import { Analyst, Access, System, AccessStatus, FieldDefinition, AppModule, AccessLevel } from '../../types';
 
 const STATUS_CONFIG: Record<AccessStatus, { color: string; icon: React.ReactNode; label: string }> = {
   'Ok': { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', icon: <CheckCircle2 className="w-4 h-4" />, label: 'Ok' },
@@ -23,9 +23,7 @@ interface AnalystsTabProps {
   setAnalystsLimit: React.Dispatch<React.SetStateAction<number>>;
   accesses: Access[];
   systems: System[];
-  canManageAnalysts: boolean;
-  canDeleteAnalyst?: boolean;
-  canManageAccess: boolean;
+  hasPermission: (module: AppModule, level?: AccessLevel) => boolean;
   currentUserRole: string | undefined;
   deactivateAnalyst: (id: string) => void;
   setEditingAnalyst: (analyst: Analyst | null) => void;
@@ -48,9 +46,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
   setAnalystsLimit,
   accesses,
   systems,
-  canManageAnalysts,
-  canDeleteAnalyst,
-  canManageAccess,
+  hasPermission,
   currentUserRole,
   deactivateAnalyst,
   setEditingAnalyst,
@@ -145,29 +141,29 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           >
                             <ShieldCheck className="w-5 h-5" />
                           </button>
-                          {canManageAnalysts && (
-                            <>
-                              <button 
-                                onClick={() => deactivateAnalyst(analyst.id)}
-                                className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                title="Desligar Analista"
-                              >
-                                <Power className="w-5 h-5" />
-                              </button>
-                              <button 
-                                onClick={() => { setEditingAnalyst(analyst); setIsAddingAnalyst(true); }}
-                                disabled={!!analyst.deactivatedAt}
-                                className={cn(
-                                  "p-2 transition-colors rounded-lg",
-                                  analyst.deactivatedAt ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
-                                )}
-                                title={analyst.deactivatedAt ? "Analistas desligados não podem ser editados" : "Editar"}
-                              >
-                                <Edit2 className="w-5 h-5" />
-                              </button>
-                            </>
+                          {hasPermission('analysts_offboard', 'edit_approval') && (
+                            <button 
+                              onClick={() => deactivateAnalyst(analyst.id)}
+                              className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Desligar Analista"
+                            >
+                              <Power className="w-5 h-5" />
+                            </button>
                           )}
-                          {canDeleteAnalyst && (
+                          {hasPermission('analysts_edit', 'edit_approval') && (
+                            <button 
+                              onClick={() => { setEditingAnalyst(analyst); setIsAddingAnalyst(true); }}
+                              disabled={!!analyst.deactivatedAt}
+                              className={cn(
+                                "p-2 transition-colors rounded-lg",
+                                analyst.deactivatedAt ? "text-slate-200 cursor-not-allowed" : "text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                              )}
+                              title={analyst.deactivatedAt ? "Analistas desligados não podem ser editados" : "Editar"}
+                            >
+                              <Edit2 className="w-5 h-5" />
+                            </button>
+                          )}
+                          {hasPermission('analysts_delete', 'edit_approval') && (
                               <button 
                                 onClick={() => deleteAnalyst(analyst.id)}
                                 disabled={!!analyst.deactivatedAt}
@@ -231,14 +227,15 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                       >
                         <ShieldCheck className="w-5 h-5" />
                       </button>
-                      {canManageAnalysts && (
-                        <>
+                      {hasPermission('analysts_offboard', 'edit_approval') && (
                           <button 
                             onClick={() => deactivateAnalyst(analyst.id)}
                             className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                           >
                             <Power className="w-5 h-5" />
                           </button>
+                      )}
+                      {hasPermission('analysts_edit', 'edit_approval') && (
                           <button 
                             onClick={() => { setEditingAnalyst(analyst); setIsAddingAnalyst(true); }}
                             disabled={!!analyst.deactivatedAt}
@@ -249,9 +246,8 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                           >
                             <Edit2 className="w-5 h-5" />
                           </button>
-                        </>
                       )}
-                      {canDeleteAnalyst && (
+                      {hasPermission('analysts_delete', 'edit_approval') && (
                           <button 
                             onClick={() => deleteAnalyst(analyst.id)}
                             disabled={!!analyst.deactivatedAt}
@@ -359,7 +355,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                   </div>
                 </div>
               </div>
-              {canManageAnalysts && !selectedAnalyst.deactivatedAt && (
+              {hasPermission('analysts_edit', 'edit_approval') && !selectedAnalyst.deactivatedAt && (
                 <button 
                   onClick={() => { setEditingAnalyst(selectedAnalyst); setIsAddingAnalyst(true); }}
                   className="p-2 lg:p-3 bg-white border border-slate-200 text-slate-600 rounded-xl lg:rounded-2xl hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm shrink-0 cursor-pointer"
@@ -398,7 +394,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                 <h3 className="font-bold text-slate-800">Controle de Acessos</h3>
                 <p className="text-sm text-slate-500">Sistemas vinculados a este analista e seus respectivos status.</p>
               </div>
-              {(canManageAnalysts || canManageAccess) && !selectedAnalyst.deactivatedAt && (
+              {hasPermission('analysts_manage_access', 'edit_approval') && !selectedAnalyst.deactivatedAt && (
                 <button 
                   onClick={() => { setEditingAnalyst(selectedAnalyst); setIsAddingAnalyst(true); }}
                   className="px-4 py-2 bg-indigo-50 text-indigo-600 text-xs font-bold rounded-xl hover:bg-indigo-100 transition-colors flex items-center gap-2"
@@ -431,7 +427,7 @@ const AnalystsTab: React.FC<AnalystsTabProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 lg:flex items-center gap-2">
-                      {canManageAccess && !selectedAnalyst.deactivatedAt ? (
+                      {hasPermission('analysts_manage_access', 'edit_approval') && !selectedAnalyst.deactivatedAt ? (
                         (['Ok', 'Pendente', 'Acesso perdido'] as AccessStatus[]).map((status) => (
                           <button
                             key={status}

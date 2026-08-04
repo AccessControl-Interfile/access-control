@@ -21,13 +21,15 @@ export default function Login() {
     const cleanEmail = email.trim();
 
     try {
-      // Tenta logar com a senha padrão para verificar se é primeiro acesso
+      // Tenta logar com a senha padrão para verificar se é primeiro acesso.
+      // O USUÁRIO NÃO DIGITA ESSA SENHA. O sistema tenta automaticamente em background.
       await signInWithEmailAndPassword(auth, cleanEmail, 'InterFile123$$');
+      
       // Se der certo, o onAuthStateChanged no App.tsx vai capturar e redirecionar para troca de senha caso mustChangePassword seja true
       await logAction(cleanEmail, 'LOGIN_FIRST_ACCESS', 'Realizou login de primeiro acesso (senha padrão)', 'Autenticação');
     } catch (err: any) {
       // Se a senha estiver errada (auth/wrong-password) OU se der credencial inválida (auth/invalid-credential),
-      // assumimos que o usuário existe (ou pode existir) e pedimos a senha dele.
+      // significa que o usuário já trocou a senha. Então pedimos a senha dele normalmente.
       if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setShowPasswordInput(true);
         setLoading(false);

@@ -84,21 +84,14 @@ import ResetPasswordRoute from './components/ResetPasswordRoute';
 import ChangePassword from './components/ChangePassword';
 import Footer from './components/Footer';
 import Toast, { ToastType } from './components/Toast';
-import { AppNotification, AppModule, AccessLevel, LEVEL_WEIGHTS } from './types';
+import { AppNotification, AppModule, AccessLevel, LEVEL_WEIGHTS, MODULE_AVAILABLE_LEVELS } from './types';
 import NotificationModal from './components/NotificationModal';
 
 const mapLegacyPermissions = (perms: any): Record<AppModule, AccessLevel> => {
-  const defaultPerms: Record<AppModule, AccessLevel> = {
-    dashboard: 'none',
-    analysts: 'none',
-    systems: 'none',
-    requests: 'none',
-    approvals: 'none',
-    extract: 'none',
-    organogram: 'none',
-    tracks: 'none',
-    settings: 'none'
-  };
+  const defaultPerms = Object.keys(MODULE_AVAILABLE_LEVELS).reduce((acc, curr) => {
+    acc[curr as AppModule] = 'none';
+    return acc;
+  }, {} as Record<AppModule, AccessLevel>);
 
   if (!perms) return defaultPerms;
   
@@ -106,15 +99,19 @@ const mapLegacyPermissions = (perms: any): Record<AppModule, AccessLevel> => {
     // If it's already the new format (checking keys)
     if ('dashboard' in perms && ('analysts' in perms || 'systems' in perms)) {
       return {
-        dashboard: perms.dashboard || 'none',
-        analysts: perms.analysts || 'none',
-        systems: perms.systems || 'none',
-        requests: perms.requests || 'none',
-        approvals: perms.approvals || 'none',
-        extract: perms.extract || 'none',
-        organogram: perms.organogram || 'none',
-        tracks: perms.tracks || 'none',
-        settings: perms.settings || 'none'
+        ...defaultPerms,
+        ...perms,
+        extract_analysts: perms.extract_analysts || perms.extract || 'none',
+        extract_systems: perms.extract_systems || perms.extract || 'none',
+        extract_users: perms.extract_users || perms.extract || 'none',
+        extract_tracks: perms.extract_tracks || perms.extract || 'none',
+        extract_matrix: perms.extract_matrix || perms.extract || 'none',
+        extract_logs: perms.extract_logs || perms.extract || 'none',
+        settings_analysts: perms.settings_analysts || perms.settings || 'none',
+        settings_systems: perms.settings_systems || perms.settings || 'none',
+        settings_tracks: perms.settings_tracks || perms.settings || 'none',
+        settings_supervisors: perms.settings_supervisors || perms.settings || 'none',
+        settings_sound: perms.settings_sound || perms.settings || 'none',
       };
     }
     
@@ -140,10 +137,28 @@ const mapLegacyPermissions = (perms: any): Record<AppModule, AccessLevel> => {
     if (p['tracks'] === 'read') mapped.tracks = 'read';
     if (p['tracks'] === 'edit') mapped.tracks = 'edit';
     
-    if (p['extract_data'] === 'read' || p['extract_logs'] === 'read') mapped.extract = 'read';
+    if (p['extract_data'] === 'read' || p['extract_logs'] === 'read') {
+      mapped.extract_analysts = 'edit';
+      mapped.extract_systems = 'edit';
+      mapped.extract_users = 'edit';
+      mapped.extract_tracks = 'edit';
+      mapped.extract_logs = 'edit';
+    }
     
-    if (p['settings_fields'] === 'read' || p['settings_supervisors'] === 'read' || p['settings_users'] === 'read') mapped.settings = 'read';
-    if (p['settings_fields'] === 'edit' || p['settings_supervisors'] === 'edit' || p['settings_users'] === 'edit') mapped.settings = 'edit';
+    if (p['settings_fields'] === 'read' || p['settings_supervisors'] === 'read' || p['settings_users'] === 'read') {
+      mapped.settings_analysts = 'read';
+      mapped.settings_systems = 'read';
+      mapped.settings_supervisors = 'read';
+      mapped.settings_tracks = 'read';
+      mapped.access_control = 'read';
+    }
+    if (p['settings_fields'] === 'edit' || p['settings_supervisors'] === 'edit' || p['settings_users'] === 'edit') {
+      mapped.settings_analysts = 'edit';
+      mapped.settings_systems = 'edit';
+      mapped.settings_supervisors = 'edit';
+      mapped.settings_tracks = 'edit';
+      mapped.access_control = 'edit';
+    }
 
     return mapped;
   }
@@ -160,12 +175,24 @@ const mapLegacyPermissions = (perms: any): Record<AppModule, AccessLevel> => {
     
     if (arrayPerms.includes('request_access')) mapped.requests = 'edit';
     if (arrayPerms.includes('approve_access')) mapped.approvals = 'edit';
-    if (arrayPerms.includes('extract_data') || arrayPerms.includes('extract_logs')) mapped.extract = 'read';
+    if (arrayPerms.includes('extract_data') || arrayPerms.includes('extract_logs')) {
+      mapped.extract_analysts = 'edit';
+      mapped.extract_systems = 'edit';
+      mapped.extract_users = 'edit';
+      mapped.extract_tracks = 'edit';
+      mapped.extract_logs = 'edit';
+    }
     
     if (arrayPerms.includes('settings_tracks')) mapped.tracks = 'edit';
     else if (arrayPerms.includes('view_tracks')) mapped.tracks = 'read';
     
-    if (arrayPerms.includes('settings_analyst_fields') || arrayPerms.includes('settings_supervisors') || arrayPerms.includes('settings_users') || arrayPerms.includes('settings_roles')) mapped.settings = 'edit';
+    if (arrayPerms.includes('settings_analyst_fields') || arrayPerms.includes('settings_supervisors') || arrayPerms.includes('settings_users') || arrayPerms.includes('settings_roles')) {
+      mapped.settings_analysts = 'edit';
+      mapped.settings_systems = 'edit';
+      mapped.settings_supervisors = 'edit';
+      mapped.settings_tracks = 'edit';
+      mapped.access_control = 'edit';
+    }
     
     mapped.organogram = 'read';
     mapped.dashboard = 'read';
@@ -225,6 +252,13 @@ export default function App() {
   const navigate = useNavigate();
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [isUsersLoaded, setIsUsersLoaded] = useState(false);
 
   const activeTab = useMemo(() => {
@@ -750,77 +784,19 @@ export default function App() {
               {
                 id: 'admin',
                 name: 'Administrador Geral',
-                permissions: {
-                  dashboard: 'edit',
-                  analysts: 'edit',
-                  systems: 'edit',
-                  requests: 'edit',
-                  approvals: 'edit',
-                  extract: 'edit',
-                  organogram: 'edit',
-                  tracks: 'edit',
-                  settings: 'edit',
-                  settings_analysts: 'edit',
-                  settings_systems: 'edit',
-                  settings_supervisors: 'edit'
-                },
+                permissions: Object.keys(MODULE_AVAILABLE_LEVELS).reduce((acc, curr) => {
+                  acc[curr as AppModule] = 'edit';
+                  return acc;
+                }, {} as Record<AppModule, AccessLevel>),
                 isSystem: true
               },
               {
                 id: 'supervisor',
                 name: 'Supervisor',
-                permissions: {
-                  dashboard: 'read',
-                  analysts: 'edit',
-                  systems: 'read',
-                  requests: 'read',
-                  approvals: 'edit',
-                  extract: 'read',
-                  organogram: 'read',
-                  tracks: 'read',
-                  settings: 'read',
-                  settings_analysts: 'none',
-                  settings_systems: 'none',
-                  settings_supervisors: 'none'
-                },
-                isSystem: true
-              },
-              {
-                id: 'treinador',
-                name: 'Treinador',
-                permissions: {
-                  dashboard: 'read',
-                  analysts: 'edit_approval',
-                  systems: 'none',
-                  requests: 'read',
-                  approvals: 'none',
-                  extract: 'none',
-                  organogram: 'read',
-                  tracks: 'read',
-                  settings: 'none',
-                  settings_analysts: 'none',
-                  settings_systems: 'none',
-                  settings_supervisors: 'none'
-                },
-                isSystem: true
-              },
-              {
-                id: 'requester',
-                name: 'Solicitante',
-                permissions: {
-                  dashboard: 'read',
-                  analysts: 'read',
-                  systems: 'none',
-                  requests: 'edit',
-                  approvals: 'none',
-                  extract: 'none',
-                  organogram: 'read',
-                  tracks: 'none',
-                  settings: 'none',
-                  settings_analysts: 'none',
-                  settings_systems: 'none',
-                  settings_supervisors: 'none'
-                },
+                permissions: Object.keys(MODULE_AVAILABLE_LEVELS).reduce((acc, curr) => {
+                  acc[curr as AppModule] = 'read';
+                  return acc;
+                }, {} as Record<AppModule, AccessLevel>),
                 isSystem: true
               }
             ];
@@ -1117,12 +1093,11 @@ export default function App() {
   }, [users, supervisors, roles]);
 
   const handleUpdateAccess = (analystId: string, systemId: string, status: AccessStatus) => {
-    if (!canManageAccess) return;
+    const permLevel = getEffectivePermission('analysts_manage_access');
+    if (permLevel === 'none' || permLevel === 'read') return;
     
     const currentUserData = users.find(u => u.id === user?.uid);
-    // APENAS o perfil de treinador irá pedir permissão.
-    // Os demais (admin, supervisor, etc.) alteram normalmente sem precisar de aprovação.
-    const finalNeedsApproval = currentUserData?.roleId === 'treinador';
+    const finalNeedsApproval = permLevel === 'edit_approval';
 
     const oldAccess = accesses.find(a => a.analystId === analystId && a.systemId === systemId);
     const analyst = allAnalysts.find(a => a.id === analystId);
@@ -1138,7 +1113,7 @@ export default function App() {
         type: 'status_change',
         status: 'pending',
         requestedBy: user?.uid || '',
-        requestedByName: currentUserData?.name || user?.email || 'Treinador',
+        requestedByName: currentUserData?.name || user?.email || 'Usuário',
         requestedAt: new Date().toISOString(),
         analystData: {
           name: analyst?.name || 'Analista Desconhecido',
@@ -1178,6 +1153,7 @@ export default function App() {
     };
 
     set(accessRef, newData).then(() => {
+      showToast("Status de acesso atualizado com sucesso!", "success");
       if (user?.email && oldAccess?.status !== status) {
         logAction(
           user.email, 
@@ -1276,6 +1252,7 @@ export default function App() {
       const wasEditing = !!editingRequest;
       setEditingRequest(null);
       setRequestSubTab('my');
+      setConfirmModal(prev => ({ ...prev, isOpen: false }));
       showToast(wasEditing ? "Solicitação atualizada e enviada!" : "Solicitação enviada para aprovação!", "success");
     } catch (error) {
       console.error("Error sending request:", error);
@@ -1400,6 +1377,72 @@ export default function App() {
         return;
       }
 
+      if (request.type === 'offboard_analyst') {
+        const analystId = request.analystData?.id;
+        if (!analystId) return;
+
+        await update(ref(db, `analysts/${analystId}`), {
+          deactivatedAt: new Date().toISOString()
+        });
+
+        await update(ref(db, `requests/${request.id}`), {
+          status: 'approved',
+          approvedBy: user?.uid || '',
+          approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
+          approvedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        if (user?.email) {
+          await logAction(
+            user.email, 
+            'APPROVE_REQUEST', 
+            `Aprovou desligamento do analista ${getAnalystDisplayName(request.analystData as Analyst)}`, 
+            'Solicitações',
+            request,
+            request.analystData
+          );
+        }
+
+        setSelectedRequestForApproval(null);
+        showToast("Desligamento de analista aprovado!", "success");
+        return;
+      }
+
+      if (request.type === 'delete_analyst') {
+        const analystId = request.analystData?.id;
+        if (!analystId) return;
+
+        await remove(ref(db, `analysts/${analystId}`));
+        const accessesToRemove = accesses.filter(a => a.analystId === analystId);
+        for (const access of accessesToRemove) {
+          await remove(ref(db, `accesses/${access.analystId}_${access.systemId}`));
+        }
+
+        await update(ref(db, `requests/${request.id}`), {
+          status: 'approved',
+          approvedBy: user?.uid || '',
+          approvedByName: currentUserData?.name || user?.email || 'Desconhecido',
+          approvedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        if (user?.email) {
+          await logAction(
+            user.email, 
+            'APPROVE_REQUEST', 
+            `Aprovou exclusão do analista ${getAnalystDisplayName(request.analystData as Analyst)}`, 
+            'Solicitações',
+            request,
+            request.analystData
+          );
+        }
+
+        setSelectedRequestForApproval(null);
+        showToast("Exclusão de analista aprovada!", "success");
+        return;
+      }
+
       // For creation requests, use request.id as analystId to ensure idempotency
       const analystId = request.id;
       const createdAt = new Date().toISOString();
@@ -1516,26 +1559,56 @@ export default function App() {
   };
 
   const deactivateAnalyst = (id: string) => {
-    if (!canManageAnalysts) return;
+    const permLevel = getEffectivePermission('analysts_offboard');
+    if (permLevel === 'none' || permLevel === 'read') return;
+
     const analyst = allAnalysts.find(a => a.id === id);
     if (!analyst || analyst.deactivatedAt) return;
+
+    const needsApproval = permLevel === 'edit_approval';
 
     setConfirmModal({
       isOpen: true,
       title: 'Desligar Analista',
-      message: `Tem certeza que deseja desligar o analista ${getAnalystDisplayName(analyst)}? Após o desligamento, os dados não poderão ser alterados nem excluídos.`,
-      confirmText: 'Desligar',
+      message: needsApproval 
+        ? `Solicitar o desligamento do analista ${getAnalystDisplayName(analyst)}? Esta ação dependerá de aprovação.`
+        : `Tem certeza que deseja desligar o analista ${getAnalystDisplayName(analyst)}? Após o desligamento, os dados não poderão ser alterados nem excluídos.`,
+      confirmText: needsApproval ? 'Solicitar Desligamento' : 'Desligar',
       confirmColor: 'bg-rose-600',
       onConfirm: async () => {
         try {
-          await update(ref(db, `analysts/${id}`), { 
-            deactivatedAt: new Date().toISOString() 
-          });
-          if (user?.email) {
-            await logAction(user.email, 'DEACTIVATE_ANALYST', `Desligou o analista: ${getAnalystDisplayName(analyst)}`, 'Analistas');
+          if (needsApproval) {
+            const requestId = push(ref(db, 'requests')).key || Math.random().toString(36).substring(2, 15);
+            const requestNumber = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+            const currentUserData = users.find(u => u.id === user?.uid);
+            
+            const requestData: AccessRequest = {
+              id: requestId,
+              requestNumber,
+              type: 'offboard_analyst',
+              status: 'pending',
+              requestedBy: user?.uid || '',
+              requestedByName: currentUserData?.name || user?.email || 'Usuário',
+              requestedAt: new Date().toISOString(),
+              analystData: analyst
+            };
+
+            await set(ref(db, `requests/${requestId}`), requestData);
+            if (user?.email) {
+              await logAction(user.email, 'CREATE_REQUEST', `Solicitou desligamento do analista: ${getAnalystDisplayName(analyst)}`, 'Solicitações', null, requestData);
+            }
+            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            showToast("Solicitação de desligamento enviada para aprovação!", "success");
+          } else {
+            await update(ref(db, `analysts/${id}`), { 
+              deactivatedAt: new Date().toISOString() 
+            });
+            if (user?.email) {
+              await logAction(user.email, 'DEACTIVATE_ANALYST', `Desligou o analista: ${getAnalystDisplayName(analyst)}`, 'Analistas');
+            }
+            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            showToast("Analista desligado com sucesso!", "success");
           }
-          setConfirmModal(prev => ({ ...prev, isOpen: false }));
-          showToast("Analista desligado com sucesso!", "success");
         } catch (error: any) {
           showToast("Erro ao desligar analista: " + error.message, "error");
         }
@@ -1543,34 +1616,64 @@ export default function App() {
     });
   };
 
-
-
   const deleteAnalyst = (id: string) => {
-    if (!hasPermission('analysts', 'edit')) return;
+    const permLevel = getEffectivePermission('analysts_delete');
+    if (permLevel === 'none' || permLevel === 'read') return;
+
     const analyst = allAnalysts.find(a => a.id === id);
-    if (analyst?.deactivatedAt) {
+    if (!analyst) return;
+    if (analyst.deactivatedAt) {
       showToast("Analistas desligados não podem ser excluídos.", "error");
       return;
     }
+
+    const needsApproval = permLevel === 'edit_approval';
+
     setConfirmModal({
       isOpen: true,
       title: 'Excluir Analista',
-      message: 'Tem certeza que deseja excluir este analista? Esta ação não pode ser desfeita.',
-      confirmText: 'Excluir',
+      message: needsApproval 
+        ? `Solicitar a exclusão do analista ${getAnalystDisplayName(analyst)}? Esta ação dependerá de aprovação.`
+        : 'Tem certeza que deseja excluir este analista? Esta ação não pode ser desfeita.',
+      confirmText: needsApproval ? 'Solicitar Exclusão' : 'Excluir',
       confirmColor: 'bg-rose-600',
       onConfirm: async () => {
         try {
-          await remove(ref(db, `analysts/${id}`));
-          if (user?.email) {
-            await logAction(user.email, 'DELETE_ANALYST', `Excluiu o analista: ${getAnalystDisplayName(analyst)}`, 'Analistas');
+          if (needsApproval) {
+            const requestId = push(ref(db, 'requests')).key || Math.random().toString(36).substring(2, 15);
+            const requestNumber = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+            const currentUserData = users.find(u => u.id === user?.uid);
+            
+            const requestData: AccessRequest = {
+              id: requestId,
+              requestNumber,
+              type: 'delete_analyst',
+              status: 'pending',
+              requestedBy: user?.uid || '',
+              requestedByName: currentUserData?.name || user?.email || 'Usuário',
+              requestedAt: new Date().toISOString(),
+              analystData: analyst
+            };
+
+            await set(ref(db, `requests/${requestId}`), requestData);
+            if (user?.email) {
+              await logAction(user.email, 'CREATE_REQUEST', `Solicitou exclusão do analista: ${getAnalystDisplayName(analyst)}`, 'Solicitações', null, requestData);
+            }
+            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            showToast("Solicitação de exclusão enviada para aprovação!", "success");
+          } else {
+            await remove(ref(db, `analysts/${id}`));
+            if (user?.email) {
+              await logAction(user.email, 'DELETE_ANALYST', `Excluiu o analista: ${getAnalystDisplayName(analyst)}`, 'Analistas');
+            }
+            const accessesToRemove = accesses.filter(a => a.analystId === id);
+            for (const access of accessesToRemove) {
+              await remove(ref(db, `accesses/${access.analystId}_${access.systemId}`));
+            }
+            if (selectedAnalyst?.id === id) setSelectedAnalyst(null);
+            setConfirmModal(prev => ({ ...prev, isOpen: false }));
+            showToast("Analista excluído com sucesso!", "success");
           }
-          const accessesToRemove = accesses.filter(a => a.analystId === id);
-          for (const access of accessesToRemove) {
-            await remove(ref(db, `accesses/${access.analystId}_${access.systemId}`));
-          }
-          if (selectedAnalyst?.id === id) setSelectedAnalyst(null);
-          setConfirmModal(prev => ({ ...prev, isOpen: false }));
-          showToast("Analista excluído com sucesso!", "success");
         } catch (error) {
           console.error("Error deleting analyst:", error);
           showToast("Erro ao excluir analista. Tente novamente.", "error");
@@ -1580,7 +1683,7 @@ export default function App() {
   };
 
   const deleteSystem = (id: string) => {
-    if (!canManageSystems) return;
+    if (!hasPermission('systems_delete', 'edit') && !hasPermission('systems_delete', 'edit_approval')) return;
     setConfirmModal({
       isOpen: true,
       title: 'Excluir Sistema',
@@ -1637,7 +1740,7 @@ export default function App() {
   };
 
   const deleteSupervisor = (supervisor: Supervisor) => {
-    if (!hasPermission('settings', 'edit')) return;
+    if (!hasPermission('settings_supervisors', 'edit')) return;
     setConfirmModal({
       isOpen: true,
       title: 'Excluir Supervisor',
@@ -1665,7 +1768,7 @@ export default function App() {
   };
 
   const handleAddUser = async (userData: { name: string, email: string, roleIds: string[] }) => {
-    if (!hasPermission('settings', 'edit')) {
+    if (!hasPermission('access_control', 'edit')) {
       showToast("Erro: Você não tem permissão para realizar esta ação.", "error");
       return;
     }
@@ -1744,7 +1847,7 @@ export default function App() {
 
   const handleAddRole = (e: React.FormEvent<HTMLFormElement>, rolePermissions: Record<AppModule, AccessLevel>) => {
     e.preventDefault();
-    if (!hasPermission('settings', 'edit')) return;
+    if (!hasPermission('access_control', 'edit')) return;
     const formData = new FormData(e.currentTarget);
     const name = editingRole?.isSystem ? editingRole.name : formData.get('name') as string;
 
@@ -1802,7 +1905,7 @@ export default function App() {
   };
 
   const deleteUser = (id: string) => {
-      if (!hasPermission('settings', 'edit')) return;
+      if (!hasPermission('access_control', 'edit')) return;
       setConfirmModal({
           isOpen: true,
           title: 'Excluir Usuário',
@@ -1839,7 +1942,7 @@ export default function App() {
   };
 
   const resetUserPassword = (id: string) => {
-      if (!hasPermission('settings', 'edit')) return;
+      if (!hasPermission('access_control', 'edit')) return;
       setConfirmModal({
           isOpen: true,
           title: 'Resetar Senha',
@@ -1878,7 +1981,7 @@ export default function App() {
   };
 
   const deleteRole = (role: Role) => {
-      if (!hasPermission('settings', 'edit')) return;
+      if (!hasPermission('access_control', 'edit')) return;
       const assignedUsers = users.filter(u => u.roleId === role.id);
       if (assignedUsers.length > 0) {
           showToast(`Não é possível excluir este perfil pois existem ${assignedUsers.length} usuários vinculados a ele.`, "error");
@@ -2187,8 +2290,12 @@ export default function App() {
     selectedColumns?: string[],
     statusFilter: 'all' | 'active' | 'deactivated' = 'all'
   ) => {
-    if (type === 'logs' && !hasPermission('extract', 'read')) return;
-    if (type !== 'logs' && !hasPermission('extract', 'read')) return;
+    if (type === 'analysts' && !hasPermission('extract_analysts', 'read')) return;
+    if (type === 'systems' && !hasPermission('extract_systems', 'read')) return;
+    if (type === 'users' && !hasPermission('extract_users', 'read')) return;
+    if (type === 'tracks' && !hasPermission('extract_tracks', 'read')) return;
+    if (type === 'accesses' && !hasPermission('extract_matrix', 'read')) return;
+    if (type === 'logs' && !hasPermission('extract_logs', 'read')) return;
     
     showToast("Preparando exportação...", "info");
     
@@ -2433,8 +2540,8 @@ export default function App() {
   };
 
   const deleteField = (type: 'analyst' | 'system', fieldId: string) => {
-    if (type === 'analyst' && !hasPermission('settings', 'edit')) return;
-    if (type === 'system' && !hasPermission('settings', 'edit')) return;
+    if (type === 'analyst' && !hasPermission('settings_analysts', 'edit')) return;
+    if (type === 'system' && !hasPermission('settings_systems', 'edit')) return;
 
     setConfirmModal({
       isOpen: true,
@@ -2483,13 +2590,13 @@ export default function App() {
   const canViewAnalysts = hasPermission('analysts', 'read');
   const isSupervisor = currentUserData?.roleId === 'supervisor' || roles.find(r => r.id === currentUserData?.roleId)?.name.toLowerCase() === 'supervisor';
 
-  const canViewSettings = hasPermission('settings', 'read') || hasPermission('settings_analysts', 'read') || hasPermission('settings_systems', 'read') || hasPermission('settings_supervisors', 'read') || isSupervisor;
+  const canViewSettings = hasPermission('settings_analysts', 'read') || hasPermission('settings_systems', 'read') || hasPermission('settings_supervisors', 'read') || hasPermission('settings_tracks', 'read') || hasPermission('settings_sound', 'read') || isSupervisor;
 
-  const canViewAccessControl = currentUserData?.roleId === 'admin' || roles.some(r => r.id === currentUserData?.roleId && r.name.toLowerCase().includes('administrador'));
+  const canViewAccessControl = hasPermission('access_control', 'read');
 
-  const canManageAnalysts = hasPermission('analysts', 'edit');
-  const canManageSystems = hasPermission('systems', 'edit');
-  const canManageAccess = hasPermission('analysts', 'edit');
+  const canManageAnalysts = hasPermission('analysts_new', 'edit_approval') || hasPermission('analysts_edit', 'edit_approval');
+  const canManageSystems = hasPermission('systems_new', 'edit_approval') || hasPermission('systems_edit', 'edit_approval');
+  const canManageAccess = hasPermission('analysts_manage_access', 'edit_approval');
 
   return (
     <Routes>
@@ -2519,9 +2626,11 @@ export default function App() {
                 onMouseEnter={handleSidebarMouseEnter}
                 onMouseLeave={handleSidebarMouseLeave}
                 className={cn(
-                  "fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200 flex flex-col transition-all duration-300 lg:static lg:h-screen",
-                  isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
-                  (isSidebarPinned || isSidebarHovered) ? "w-64" : "w-20"
+                  "fixed z-50 bg-white flex flex-col transition-all duration-300 lg:static lg:h-screen",
+                  "inset-x-0 top-0 max-h-[90vh] shadow-2xl rounded-b-3xl w-full",
+                  "lg:inset-y-0 lg:left-0 lg:max-h-none lg:shadow-none lg:rounded-none lg:border-r lg:border-slate-200",
+                  isSidebarOpen ? "translate-y-0 lg:translate-x-0" : "-translate-y-full lg:translate-y-0 lg:translate-x-0",
+                  (isSidebarPinned || isSidebarHovered) ? "lg:w-72" : "lg:w-20"
                 )}
               >
         <div className="p-6 border-b border-slate-100 flex items-center justify-between overflow-hidden">
@@ -2529,7 +2638,7 @@ export default function App() {
             <ShieldCheck className="w-8 h-8 shrink-0" />
             <motion.span 
               initial={false}
-              animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, width: (isSidebarPinned || isSidebarHovered) ? 'auto' : 0 }}
+              animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, width: (isMobile || isSidebarPinned || isSidebarHovered) ? 'auto' : 0 }}
               className="font-bold text-lg tracking-tight whitespace-nowrap overflow-hidden"
             >
               AccessControl
@@ -2555,18 +2664,18 @@ export default function App() {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto no-scrollbar overflow-x-hidden">
+        <nav className="flex-1 px-3 py-4 overflow-y-auto no-scrollbar overflow-x-hidden grid grid-cols-1 min-[400px]:grid-cols-2 md:grid-cols-3 lg:flex lg:flex-col lg:space-y-1 gap-2 lg:gap-0">
           <button 
             onClick={() => { setActiveTab('dashboard'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
             className={cn(
               "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
               activeTab === 'dashboard' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
             )}
-            title={!(isSidebarPinned || isSidebarHovered) ? "Dashboard" : ""}
+            title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Dashboard" : ""}
           >
             <LayoutDashboard className="w-5 h-5 shrink-0" />
             <motion.span
-              animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+              animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
               className="whitespace-nowrap overflow-hidden"
             >
               Dashboard
@@ -2580,11 +2689,11 @@ export default function App() {
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 activeTab === 'analysts' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Analistas" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Analistas" : ""}
             >
               <Users className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Analistas
@@ -2592,18 +2701,18 @@ export default function App() {
             </button>
           )}
 
-          {canManageSystems && (
+          {hasPermission('systems', 'read') && (
             <button 
               onClick={() => { setActiveTab('systems'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 activeTab === 'systems' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Sistemas" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Sistemas" : ""}
             >
               <Monitor className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Sistemas
@@ -2618,11 +2727,11 @@ export default function App() {
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative group",
                 activeTab === 'request' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Solicitações" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Solicitações" : ""}
             >
               <PlusCircle className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Solicitações
@@ -2630,7 +2739,7 @@ export default function App() {
               {requests.filter(r => r.status === 'rejected' && r.requestedBy === user?.uid).length > 0 && (
                 <span className={cn(
                   "absolute bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full transition-all",
-                  (isSidebarPinned || isSidebarHovered) ? "right-4 w-5 h-5" : "right-1.5 top-2 w-4 h-4"
+                  (isMobile || isSidebarPinned || isSidebarHovered) ? "right-4 w-5 h-5" : "right-1.5 top-2 w-4 h-4"
                 )}>
                   {requests.filter(r => r.status === 'rejected' && r.requestedBy === user?.uid).length}
                 </span>
@@ -2645,11 +2754,11 @@ export default function App() {
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 relative group",
                 activeTab === 'approvals' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Aprovações" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Aprovações" : ""}
             >
               <ClipboardCheck className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Aprovações
@@ -2657,7 +2766,7 @@ export default function App() {
               {requests.filter(r => r.status === 'pending').length > 0 && (
                 <span className={cn(
                   "absolute bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full transition-all",
-                  (isSidebarPinned || isSidebarHovered) ? "right-4 w-5 h-5" : "right-1.5 top-2 w-4 h-4"
+                  (isMobile || isSidebarPinned || isSidebarHovered) ? "right-4 w-5 h-5" : "right-1.5 top-2 w-4 h-4"
                 )}>
                   {requests.filter(r => r.status === 'pending').length}
                 </span>
@@ -2665,18 +2774,18 @@ export default function App() {
             </button>
           )}
 
-          {hasPermission('extract', 'read') && (
+          {(hasPermission('extract_analysts', 'read') || hasPermission('extract_systems', 'read') || hasPermission('extract_users', 'read') || hasPermission('extract_tracks', 'read') || hasPermission('extract_matrix', 'read') || hasPermission('extract_logs', 'read')) && (
             <button 
               onClick={() => { setActiveTab('extract'); setSelectedAnalyst(null); setIsSidebarOpen(false); }}
               className={cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 activeTab === 'extract' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Extrair Bases" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Extrair Bases" : ""}
             >
               <Download className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Extrair Bases
@@ -2691,11 +2800,11 @@ export default function App() {
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 activeTab === 'organogram' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Organograma" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Organograma" : ""}
             >
               <GitBranch className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Organograma
@@ -2710,11 +2819,11 @@ export default function App() {
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 activeTab === 'tracks' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Esteiras" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Esteiras" : ""}
             >
               <RouteIcon className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Esteiras
@@ -2729,11 +2838,11 @@ export default function App() {
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group relative",
                 activeTab === 'access_control' ? "bg-indigo-50 text-indigo-600 font-medium" : "text-slate-500 hover:bg-slate-100"
               )}
-              title={!(isSidebarPinned || isSidebarHovered) ? "Gestão de Permissões" : ""}
+              title={!(isMobile || isSidebarPinned || isSidebarHovered) ? "Gestão de Permissões" : ""}
             >
               <ShieldCheck className="w-5 h-5 shrink-0" />
               <motion.span
-                animate={{ opacity: (isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
+                animate={{ opacity: (isMobile || isSidebarPinned || isSidebarHovered) ? 1 : 0, x: (isMobile || isSidebarPinned || isSidebarHovered) ? 0 : -10 }}
                 className="whitespace-nowrap overflow-hidden"
               >
                 Gestão de Permissões
@@ -2745,7 +2854,7 @@ export default function App() {
         <div className="p-4 border-t border-slate-100 overflow-hidden">
           <div className={cn(
             "bg-slate-50 rounded-2xl p-4 transition-all duration-300",
-            (isSidebarPinned || isSidebarHovered) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+            (isMobile || isSidebarPinned || isSidebarHovered) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
           )}>
             <div className="mb-3">
               <p className="text-sm font-semibold truncate" title={currentUserData?.name || user?.email || 'Usuário'}>
@@ -2778,7 +2887,7 @@ export default function App() {
             </button>
           </div>
 
-          {!(isSidebarPinned || isSidebarHovered) && (
+          {!(isMobile || isSidebarPinned || isSidebarHovered) && (
             <div className="flex flex-col items-center gap-4 py-2">
               {canViewSettings && (
                 <button 
@@ -2897,7 +3006,7 @@ export default function App() {
                 </div>
               </div>
             )}
-            {activeTab === 'analysts' && !currentSelectedAnalyst && canManageAnalysts && (
+            {activeTab === 'analysts' && !currentSelectedAnalyst && (hasPermission('analysts_new', 'edit_approval') || hasPermission('analysts_import', 'edit_approval') || hasPermission('analysts_mass_offboard', 'edit_approval')) && (
               <div className="relative">
                 <button 
                   onClick={() => setIsAnalystMenuOpen(!isAnalystMenuOpen)}
@@ -2944,30 +3053,42 @@ export default function App() {
                             Todos
                           </button>
 
-                          <div className="h-px bg-slate-100 my-1" />
-                          <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Ações</div>
-                          <button 
-                            onClick={() => { setIsAddingAnalyst(true); setIsAnalystMenuOpen(false); }}
-                            className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center gap-2"
-                          >
-                            <Plus className="w-4 h-4" />
-                            Novo Analista
-                          </button>
-                          <button 
-                            onClick={() => { setIsImportModalOpen(true); setIsAnalystMenuOpen(false); }}
-                            className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2"
-                          >
-                            <Upload className="w-4 h-4" />
-                            Importar
-                          </button>
-                          <div className="h-px bg-slate-100 my-1" />
-                          <button 
-                            onClick={() => { setIsMassDeactivateModalOpen(true); setIsAnalystMenuOpen(false); }}
-                            className="w-full text-left px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-2"
-                          >
-                            <UserMinus className="w-4 h-4" />
-                            Desligamento
-                          </button>
+                          {(hasPermission('analysts_new', 'edit_approval') || hasPermission('analysts_import', 'edit_approval') || hasPermission('analysts_mass_offboard', 'edit_approval')) && (
+                            <>
+                              <div className="h-px bg-slate-100 my-1" />
+                              <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Ações</div>
+                            </>
+                          )}
+                          {hasPermission('analysts_new', 'edit_approval') && (
+                            <button 
+                              onClick={() => { setIsAddingAnalyst(true); setIsAnalystMenuOpen(false); }}
+                              className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-colors flex items-center gap-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Novo Analista
+                            </button>
+                          )}
+                          {hasPermission('analysts_import', 'edit_approval') && (
+                            <button 
+                              onClick={() => { setIsImportModalOpen(true); setIsAnalystMenuOpen(false); }}
+                              className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-xl transition-colors flex items-center gap-2"
+                            >
+                              <Upload className="w-4 h-4" />
+                              Importar
+                            </button>
+                          )}
+                          {hasPermission('analysts_mass_offboard', 'edit_approval') && (
+                            <>
+                              <div className="h-px bg-slate-100 my-1" />
+                              <button 
+                                onClick={() => { setIsMassDeactivateModalOpen(true); setIsAnalystMenuOpen(false); }}
+                                className="w-full text-left px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition-colors flex items-center gap-2"
+                              >
+                                <UserMinus className="w-4 h-4" />
+                                Desligamento
+                              </button>
+                            </>
+                          )}
                         </div>
                       </motion.div>
                     </>
@@ -3012,9 +3133,7 @@ export default function App() {
                 setAnalystsLimit={setAnalystsLimit}
                 accesses={accesses}
                 systems={systems}
-                canManageAnalysts={canManageAnalysts}
-                canDeleteAnalyst={hasPermission('analysts', 'edit')}
-                canManageAccess={canManageAccess}
+                hasPermission={hasPermission}
                 currentUserRole={currentUserData?.roleId}
                 deactivateAnalyst={deactivateAnalyst}
                 setEditingAnalyst={setEditingAnalyst}
@@ -3035,7 +3154,7 @@ export default function App() {
                 systems={systems}
                 accesses={accesses}
                 searchQuery={searchQuery}
-                canManageSystems={canManageSystems}
+                hasPermission={hasPermission}
                 systemFields={systemFields}
                 setEditingSystem={setEditingSystem}
                 setIsAddingSystem={setIsAddingSystem}
@@ -3481,10 +3600,14 @@ export default function App() {
           message={confirmModal.message}
           confirmText={confirmModal.confirmText || 'Confirmar'}
           confirmColor={confirmModal.confirmColor || 'bg-rose-600'}
-          onConfirm={(password) => {
-            confirmModal.onConfirm(password);
-            if (!confirmModal.requirePassword) {
-              setConfirmModal(prev => ({ ...prev, isOpen: false }));
+          onConfirm={async (password) => {
+            try {
+              if (confirmModal.requirePassword && !password) return;
+              await confirmModal.onConfirm(password);
+            } finally {
+              if (!confirmModal.requirePassword) {
+                setConfirmModal(prev => ({ ...prev, isOpen: false }));
+              }
             }
           }}
           onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}

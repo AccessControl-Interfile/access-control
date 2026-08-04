@@ -353,7 +353,7 @@ export default function SettingsTab({
         </div>
       )}
 
-      {hasPermission('tracks', 'edit') && (
+      {(hasPermission('settings_tracks', 'read') || hasPermission('settings_tracks', 'edit')) && (
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center">
             <div>
@@ -363,34 +363,38 @@ export default function SettingsTab({
               </h3>
               <p className="text-sm text-slate-500">Gerencie as esteiras disponíveis para seleção.</p>
             </div>
-            <button 
-              onClick={() => setIsAddingTrack(true)}
-              className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
+            {hasPermission('settings_tracks', 'edit') && (
+              <button 
+                onClick={() => setIsAddingTrack(true)}
+                className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors cursor-pointer"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            )}
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {tracks.map(track => (
                 <div key={track.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
                   <span className="text-sm font-bold text-slate-700 truncate">{track.name}</span>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button 
-                      onClick={() => setEditingTrack(track)}
-                      className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-                      title="Editar Esteira"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => deleteTrack(track)}
-                      className="p-2 bg-white border border-slate-200 text-rose-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-                      title="Excluir Esteira"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {hasPermission('settings_tracks', 'edit') && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button 
+                        onClick={() => setEditingTrack(track)}
+                        className="p-2 bg-white border border-slate-200 text-indigo-600 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                        title="Editar Esteira"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => deleteTrack(track)}
+                        className="p-2 bg-white border border-slate-200 text-rose-500 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+                        title="Excluir Esteira"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

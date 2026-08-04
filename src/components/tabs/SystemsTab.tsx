@@ -1,14 +1,14 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Monitor, Edit2, Trash2, AlertCircle, Plus } from 'lucide-react';
-import { System, Access, FieldDefinition } from '../../types';
+import { System, Access, FieldDefinition, AppModule, AccessLevel } from '../../types';
 
 interface SystemsTabProps {
   key?: string;
   systems: System[];
   accesses: Access[];
   searchQuery: string;
-  canManageSystems: boolean;
+  hasPermission: (module: AppModule, level?: AccessLevel) => boolean;
   systemFields: FieldDefinition[];
   setEditingSystem: (system: System) => void;
   setIsAddingSystem: (isAdding: boolean) => void;
@@ -19,7 +19,7 @@ export default function SystemsTab({
   systems,
   accesses,
   searchQuery,
-  canManageSystems,
+  hasPermission,
   systemFields,
   setEditingSystem,
   setIsAddingSystem,
@@ -79,21 +79,21 @@ export default function SystemsTab({
                 <Monitor className="w-6 h-6" />
               </div>
               <div className="flex items-center gap-1">
-                {canManageSystems && (
-                  <>
-                    <button 
-                      onClick={() => { setEditingSystem(system); setIsAddingSystem(true); }}
-                      className="p-2 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
-                    >
-                      <Edit2 className="w-5 h-5" />
-                    </button>
-                    <button 
-                      onClick={() => deleteSystem(system.id)}
-                      className="p-2 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </>
+                {hasPermission('systems_edit', 'edit_approval') && (
+                  <button 
+                    onClick={() => { setEditingSystem(system); setIsAddingSystem(true); }}
+                    className="p-2 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    <Edit2 className="w-5 h-5" />
+                  </button>
+                )}
+                {hasPermission('systems_delete', 'edit_approval') && (
+                  <button 
+                    onClick={() => deleteSystem(system.id)}
+                    className="p-2 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                 )}
               </div>
             </div>
@@ -125,7 +125,7 @@ export default function SystemsTab({
           </div>
         );
       })}
-      {canManageSystems && (
+      {hasPermission('systems_new', 'edit_approval') && (
         <button 
           onClick={() => setIsAddingSystem(true)}
           className="border-2 border-dashed border-slate-200 rounded-3xl p-6 flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition-all group"
