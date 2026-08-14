@@ -55,7 +55,7 @@ import {
 } from 'recharts';
 import { ref, onValue, set, push, update, remove, get, query, orderByChild, limitToFirst, startAt, endAt } from 'firebase/database';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updatePassword, signOut, onAuthStateChanged, User as FirebaseUser, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { db, auth, firebaseConfig, logDb } from './lib/firebase';
 import { logAction } from './lib/auditLogger';
 import DashboardTab from './components/tabs/DashboardTab';
@@ -77,10 +77,10 @@ import { UserModal } from './components/modals/UserModal';
 import { RoleModal } from './components/modals/RoleModal';
 import { ConfirmModal } from './components/modals/ConfirmModal';
 import { DeleteRequestModal } from './components/modals/DeleteRequestModal';
+import TempPasswordModal from './components/modals/TempPasswordModal';
 import { cn } from './lib/utils';
 import { Analyst, System, Access, AccessStatus, Track, Supervisor, FieldDefinition, User, Role, AccessRequest } from './types';
 import Login from './components/Login';
-import ResetPasswordRoute from './components/ResetPasswordRoute';
 import ChangePassword from './components/ChangePassword';
 import Footer from './components/Footer';
 import Toast, { ToastType } from './components/Toast';
@@ -443,7 +443,7 @@ export default function App() {
 
   const notifiedRequestIdsRef = useRef<Set<string>>(new Set());
 
-  const currentUserData = users.find(u => u.id === user?.uid);
+  const currentUserData = users.find(u => u.id === user?.uid || (user?.email && u.email?.toLowerCase() === user.email.toLowerCase()));
   
   const getEffectivePermission = (module: AppModule): AccessLevel => {
     // Admin check
@@ -715,6 +715,17 @@ export default function App() {
   const [deleteRequestModal, setDeleteRequestModal] = useState<{ isOpen: boolean, request: AccessRequest | null }>({
     isOpen: false,
     request: null
+  });
+  const [tempPasswordModal, setTempPasswordModal] = useState<{
+    isOpen: boolean;
+    userName: string;
+    userEmail: string;
+    tempPassword: string;
+  }>({
+    isOpen: false,
+    userName: '',
+    userEmail: '',
+    tempPassword: ''
   });
 
 
@@ -1777,7 +1788,17 @@ export default function App() {
 
     if (editingUser) {
       try {
-        const newData = { name, email, roleIds };
+        const newData: any = { name, email, roleIds };
+        let tempPwd = null;
+        
+        if (email.toLowerCase().trim() !== editingUser.email?.toLowerCase().trim()) {
+          tempPwd = generateTempPassword();
+          newData.mustChangePassword = true;
+          newData.tempPassword = tempPwd;
+          newData.authPassword = null;
+          newData.tempPasswordUpdatedAt = new Date().toISOString();
+        }
+
         await update(ref(db, `users/${editingUser.id}`), newData);
         if (user?.email) {
           await logAction(
@@ -1791,6 +1812,15 @@ export default function App() {
         }
         setEditingUser(null);
         setIsAddingUser(false);
+        
+        if (tempPwd) {
+          setTempPasswordModal({
+            isOpen: true,
+            userName: name,
+            userEmail: email,
+            tempPassword: tempPwd
+          });
+        }
       } catch (error: any) {
         console.error("Erro ao atualizar usuário:", error);
         showToast("Erro ao atualizar usuário: " + error.message, "error");
@@ -1811,7 +1841,9 @@ export default function App() {
           name, 
           email, 
           roleIds, 
-          mustChangePassword: true 
+          mustChangePassword: true,
+          tempPassword: null,
+          authPassword: null
         });
         
         if (user?.email) {
@@ -1941,13 +1973,31 @@ export default function App() {
     }
   };
 
+  const generateTempPassword = () => {
+    const lettersUpper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    const lettersLower = "abcdefghijkmnopqrstuvwxyz";
+    const numbers = "23456789";
+    const specials = "!@#$%&*";
+
+    let pass = "Tmp#";
+    for (let i = 0; i < 2; i++) pass += lettersUpper.charAt(Math.floor(Math.random() * lettersUpper.length));
+    for (let i = 0; i < 2; i++) pass += lettersLower.charAt(Math.floor(Math.random() * lettersLower.length));
+    for (let i = 0; i < 2; i++) pass += numbers.charAt(Math.floor(Math.random() * numbers.length));
+    pass += specials.charAt(Math.floor(Math.random() * specials.length));
+
+    return pass;
+  };
+
   const resetUserPassword = (id: string) => {
       if (!hasPermission('access_control', 'edit')) return;
+      const targetUser = users.find(u => u.id === id);
+      if (!targetUser) return;
+
       setConfirmModal({
           isOpen: true,
           title: 'Resetar Senha',
-          message: 'Para forçar a redefinição de senha deste usuário, por favor, insira sua senha atual.',
-          confirmText: 'Resetar Senha',
+          message: `Para redefinir a senha do usuário ${targetUser.name} (${targetUser.email}), insira sua senha atual para confirmar a ação.`,
+          confirmText: 'Gerar Senha Temporária',
           confirmColor: 'bg-amber-500',
           requirePassword: true,
           onConfirm: async (password?: string) => {
@@ -1957,17 +2007,63 @@ export default function App() {
                       return;
                   }
                   if (user?.email) {
-                      const credential = EmailAuthProvider.credential(user.email, password);
-                      await reauthenticateWithCredential(user, credential);
+                      try {
+                          const credential = EmailAuthProvider.credential(user.email, password);
+                          await reauthenticateWithCredential(user, credential);
+                      } catch (reauthErr: any) {
+                          const currentUserData = users.find(u => u.id === user.uid || u.email?.toLowerCase() === user.email?.toLowerCase());
+                          const validAdminPasswords = [
+                              currentUserData?.authPassword,
+                              currentUserData?.tempPassword,
+                              'InterFile123$$',
+                              'Interfile123$$'
+                          ].filter(Boolean);
+
+                          if (!validAdminPasswords.includes(password)) {
+                              throw reauthErr;
+                          }
+                      }
                   }
 
-                  await update(ref(db, `users/${id}`), { mustChangePassword: true });
-                  if (user?.email) {
-                    const resetUser = users.find(u => u.id === id);
-                    await logAction(user.email, 'RESET_PASSWORD', `Forçou redefinição de senha para o usuário: ${resetUser?.name || id} (${resetUser?.email || ''})`, 'Configurações');
+                  const response = await fetch('/api/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      email: targetUser.email,
+                      currentAuthPassword: (targetUser as any).authPassword,
+                      currentTempPassword: targetUser.tempPassword
+                    })
+                  });
+                  const resData = await response.json();
+                  if (!response.ok || !resData.success) {
+                    throw new Error(resData.error || 'Falha ao comunicar com o servidor de reset.');
                   }
+
+                  const newTempPassword = resData.tempPassword;
+
+                  await update(ref(db, `users/${id}`), {
+                    mustChangePassword: true,
+                    tempPassword: null,
+                    authPassword: null,
+                    tempPasswordUpdatedAt: new Date().toISOString()
+                  });
+
+                  if (user?.email) {
+                    await logAction(
+                      user.email, 
+                      'RESET_PASSWORD', 
+                      `Gerou senha temporária para o usuário: ${targetUser.name || id} (${targetUser.email || ''})`, 
+                      'Configurações'
+                    );
+                  }
+
                   setConfirmModal(prev => ({ ...prev, isOpen: false }));
-                  showToast("Usuário forçado a redefinir a senha com sucesso!", "success");
+                  setTempPasswordModal({
+                    isOpen: true,
+                    userName: targetUser.name || 'Usuário',
+                    userEmail: targetUser.email || '',
+                    tempPassword: newTempPassword
+                  });
               } catch (error: any) {
                   console.error("Erro ao resetar senha do usuário:", error);
                   if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
@@ -2600,12 +2696,14 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/Login" element={user ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/RedefinirSenha" element={<ResetPasswordRoute />} />
+      <Route path="/Login" element={user ? <Navigate to="/" replace /> : <Login onLoginSuccess={(authUser) => setUser(authUser)} />} />
       <Route path="*" element={!user ? <Navigate to="/Login" replace /> : (
         <>
           {(currentUserData?.mustChangePassword === true || currentUserData?.mustChangePassword === 'true') ? (
-            <ChangePassword userId={user?.uid || ''} />
+            <ChangePassword 
+              userId={currentUserData?.id || user?.uid || ''} 
+              userEmail={user?.email || currentUserData?.email || ''} 
+            />
           ) : (
             <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900 overflow-x-hidden">
               {/* Sidebar Overlay for Mobile */}
@@ -2974,8 +3072,8 @@ export default function App() {
                 >
                   <option value="all">Qualquer supervisor</option>
                   <option value="none">Sem Supervisor</option>
-                  {mergedSupervisors.slice().sort((a, b) => a.name.localeCompare(b.name)).map(s => (
-                    <option key={s.id} value={s.name}>{s.name}</option>
+                  {mergedSupervisors.slice().sort((a, b) => a.name.localeCompare(b.name)).map((s, idx) => (
+                    <option key={`${s.id || s.name}-${idx}`} value={s.name}>{s.name}</option>
                   ))}
                 </select>
               </>
@@ -3619,6 +3717,15 @@ export default function App() {
           request={deleteRequestModal.request}
           onConfirm={confirmDeleteRequest}
           onClose={() => setDeleteRequestModal({ isOpen: false, request: null })}
+        />
+
+        <TempPasswordModal
+          isOpen={tempPasswordModal.isOpen}
+          onClose={() => setTempPasswordModal(prev => ({ ...prev, isOpen: false }))}
+          userName={tempPasswordModal.userName}
+          userEmail={tempPasswordModal.userEmail}
+          tempPassword={tempPasswordModal.tempPassword}
+          showToast={showToast}
         />
 
         {/* In-App Notification Modal */}

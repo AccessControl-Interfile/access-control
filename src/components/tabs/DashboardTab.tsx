@@ -187,8 +187,8 @@ export default function DashboardTab({
                       <Clock className="w-3 h-3" /> Pendentes
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {track.pendingSystems.map((system: any) => (
-                        <span key={system.id} className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100">
+                      {track.pendingSystems.map((system: any, idx: number) => (
+                        <span key={`psys-${system.id || system.name}-${idx}`} className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100">
                           {system.name}
                         </span>
                       ))}
@@ -201,8 +201,8 @@ export default function DashboardTab({
                       <AlertCircle className="w-3 h-3" /> Acessos Perdidos
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {track.lostSystems.map((system: any) => (
-                        <span key={system.id} className="px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg border border-rose-100">
+                      {track.lostSystems.map((system: any, idx: number) => (
+                        <span key={`lsys-${system.id || system.name}-${idx}`} className="px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg border border-rose-100">
                           {system.name}
                         </span>
                       ))}
@@ -239,8 +239,8 @@ export default function DashboardTab({
                       <Clock className="w-3 h-3" /> Esteiras Pendentes
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {system.pendingTracks.map((track: any) => (
-                        <span key={track.id} className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100">
+                      {system.pendingTracks.map((track: any, idx: number) => (
+                        <span key={`ptrack-${track.id || track.name}-${idx}`} className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100">
                           {track.name}
                         </span>
                       ))}
@@ -253,8 +253,8 @@ export default function DashboardTab({
                       <AlertCircle className="w-3 h-3" /> Esteiras Perdidas
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {system.lostTracks.map((track: any) => (
-                        <span key={track.id} className="px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg border border-rose-100">
+                      {system.lostTracks.map((track: any, idx: number) => (
+                        <span key={`ltrack-${track.id || track.name}-${idx}`} className="px-2 py-1 bg-rose-50 text-rose-700 text-[10px] font-bold rounded-lg border border-rose-100">
                           {track.name}
                         </span>
                       ))}

@@ -211,10 +211,10 @@ export default function NotificationModal({
                         <div className="space-y-6">
                           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Sistemas Solicitados</h4>
                           <div className="grid grid-cols-2 gap-2">
-                            {selectedRequest.systemIds?.map(sid => {
+                            {selectedRequest.systemIds?.map((sid, sIdx) => {
                               const system = systems.find(s => s.id === sid);
                               return (
-                                <div key={sid} className="px-4 py-3 bg-indigo-50/50 text-indigo-600 text-xs font-bold rounded-xl border border-indigo-100 flex items-center justify-center text-center">
+                                <div key={`${sid}-${sIdx}`} className="px-4 py-3 bg-indigo-50/50 text-indigo-600 text-xs font-bold rounded-xl border border-indigo-100 flex items-center justify-center text-center">
                                   {system?.name || sid}
                                 </div>
                               );
@@ -348,12 +348,12 @@ export default function NotificationModal({
                 <p className="text-xl font-medium text-slate-400">Nenhuma notificação nova</p>
               </div>
             ) : (
-              notifications.map((notification) => {
+              notifications.map((notification, nIdx) => {
                 const request = requests.find(r => r.id === notification.requestId);
                 
                 return (
                   <motion.div 
-                    key={notification.id}
+                    key={notification.id ? `${notification.id}-${nIdx}` : `notif-${nIdx}`}
                     layout
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}

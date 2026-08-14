@@ -196,6 +196,8 @@ export interface User {
   roleId?: string; // Legacy support
   permissions?: any; // Legacy support
   mustChangePassword?: boolean;
+  tempPassword?: string;
+  authPassword?: string;
   notificationSound?: string;
 }
 

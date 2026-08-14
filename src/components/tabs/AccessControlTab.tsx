@@ -86,10 +86,14 @@ export default function AccessControlTab({
                          (user.email || '').toLowerCase().includes(query);
                 })
                 .slice(0, usersLimit)
-                .map(user => {
-                  const userRoles = roles.filter(r => user.roleIds?.includes(r.id) || user.roleId === r.id);
+                .map((user, uIdx) => {
+                  const rawUserRoles = roles.filter(r => user.roleIds?.includes(r.id) || user.roleId === r.id);
+                  const userRoles = Array.from(new Set(rawUserRoles.map(r => r.id)))
+                    .map(id => roles.find(r => r.id === id))
+                    .filter((r): r is Role => Boolean(r));
+
                   return (
-                    <div key={user.id} className="flex flex-col p-5 bg-white rounded-2xl border border-slate-200 shadow-sm gap-4">
+                    <div key={user.id ? `${user.id}-${uIdx}` : `user-${uIdx}`} className="flex flex-col p-5 bg-white rounded-2xl border border-slate-200 shadow-sm gap-4">
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-bold text-slate-800 text-lg">{user.name}</p>
@@ -122,8 +126,8 @@ export default function AccessControlTab({
                         )}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {userRoles.length > 0 ? userRoles.map(r => (
-                          <span key={r.id} className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-xs font-semibold flex items-center gap-1.5">
+                        {userRoles.length > 0 ? userRoles.map((r, rIdx) => (
+                          <span key={`${r.id}-${rIdx}`} className="px-3 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-xs font-semibold flex items-center gap-1.5">
                             <Shield className="w-3 h-3" />
                             {r.name}
                           </span>

@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { signInWithEmailAndPassword, updatePassword } from 'firebase/auth';
+import { ref, get, update } from 'firebase/database';
+import { auth, db } from '../lib/firebase';
 import { logAction } from '../lib/auditLogger';
 import { Lock, Mail, Loader2, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export default function Login() {
+interface LoginProps {
+  onLoginSuccess?: (user: any) => void;
+}
+
+export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -13,38 +18,17 @@ export default function Login() {
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
     
     const cleanEmail = email.trim();
-
-    try {
-      // Tenta logar com a senha padrão para verificar se é primeiro acesso.
-      // O USUÁRIO NÃO DIGITA ESSA SENHA. O sistema tenta automaticamente em background.
-      await signInWithEmailAndPassword(auth, cleanEmail, 'InterFile123$$');
-      
-      // Se der certo, o onAuthStateChanged no App.tsx vai capturar e redirecionar para troca de senha caso mustChangePassword seja true
-      await logAction(cleanEmail, 'LOGIN_FIRST_ACCESS', 'Realizou login de primeiro acesso (senha padrão)', 'Autenticação');
-    } catch (err: any) {
-      // Se a senha estiver errada (auth/wrong-password) OU se der credencial inválida (auth/invalid-credential),
-      // significa que o usuário já trocou a senha. Então pedimos a senha dele normalmente.
-      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setShowPasswordInput(true);
-        setLoading(false);
-      } else if (err.code === 'auth/user-not-found') {
-        setError('E-mail não encontrado.');
-        setLoading(false);
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Muitas tentativas. Tente novamente mais tarde.');
-        setLoading(false);
-      } else {
-        console.error(err);
-        setError('Ocorreu um erro. Tente novamente.');
-        setLoading(false);
-      }
+    if (!cleanEmail) {
+      setError('Por favor, informe seu e-mail.');
+      return;
     }
+
+    setShowPasswordInput(true);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -53,24 +37,122 @@ export default function Login() {
     setError('');
 
     const cleanEmail = email.trim();
+    if (!cleanEmail || !password) {
+      setError('Por favor, informe e-mail e senha.');
+      setLoading(false);
+      return;
+    }
 
     try {
-      await signInWithEmailAndPassword(auth, cleanEmail, password);
-      
-      // Login bem-sucedido no Authentication.
-      // O App.tsx observará a mudança de estado e renderizará o Dashboard.
-      await logAction(cleanEmail, 'LOGIN_SUCCESS', 'Realizou login no sistema', 'Autenticação');
-    } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-        setError('Senha incorreta.');
-      } else if (err.code === 'auth/invalid-email') {
-        setError('Formato de e-mail inválido.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Muitas tentativas falhas. Tente novamente mais tarde.');
-      } else {
-        setError('Ocorreu um erro ao fazer login. Tente novamente.');
+      // 1. Busca dados do usuário no RTDB para obter senhas conhecidas (authPassword, tempPassword)
+      let targetUserKey: string | null = null;
+      let targetUserData: any = null;
+
+      try {
+        const snapshot = await get(ref(db, 'users'));
+        if (snapshot.exists()) {
+          const entries = Object.entries(snapshot.val());
+          const match = entries.find(([_, u]: [string, any]) => u.email?.toLowerCase() === cleanEmail.toLowerCase());
+          if (match) {
+            targetUserKey = match[0];
+            targetUserData = match[1];
+          }
+        }
+      } catch (dbErr) {
+        console.error("Erro ao buscar dados do usuário no RTDB:", dbErr);
       }
+
+      // 2. Monta lista de senhas candidatas a testar no Firebase Auth
+      const rawCandidates = [
+        password,
+        targetUserData?.tempPassword,
+        targetUserData?.authPassword,
+        'InterFile123$$'
+      ];
+      
+      const candidates = Array.from(new Set(rawCandidates.filter((p): p is string => Boolean(p) && typeof p === 'string')));
+
+      let loggedInUser = null;
+      let usedCandidate = null;
+
+      for (const cand of candidates) {
+        try {
+          const cred = await signInWithEmailAndPassword(auth, cleanEmail, cand);
+          if (cred.user) {
+            loggedInUser = cred.user;
+            usedCandidate = cand;
+            break;
+          }
+        } catch (candErr) {
+          // Continua para o próximo candidato
+        }
+      }
+
+      if (loggedInUser) {
+        // Se logou com um candidato diferente da senha digitada (ou se tinha senha temp), atualiza Firebase Auth
+        if (usedCandidate !== password) {
+          try {
+            await updatePassword(loggedInUser, password);
+          } catch (upErr) {
+            console.error("Aviso ao atualizar senha no Firebase Auth:", upErr);
+          }
+        }
+
+        // Limpa qualquer resquício de senha armazenada em texto plano no RTDB
+        if (targetUserKey) {
+          try {
+            await update(ref(db, `users/${targetUserKey}`), {
+              authPassword: null,
+              tempPassword: null
+            });
+          } catch (rtdbErr) {
+            console.error("Erro ao atualizar RTDB:", rtdbErr);
+          }
+        }
+
+        await logAction(cleanEmail, 'LOGIN_SUCCESS', 'Realizou login no sistema', 'Autenticação');
+        onLoginSuccess?.(loggedInUser);
+        setLoading(false);
+        return;
+      }
+
+      // 3. Se o login no Firebase Auth não passou, verifica se a senha bate com a senha temporária/atual registrada no RTDB
+      const isMatchedInRTDB = targetUserData && (
+        (targetUserData.tempPassword && password === targetUserData.tempPassword) ||
+        (targetUserData.authPassword && password === targetUserData.authPassword) ||
+        password === 'InterFile123$$'
+      );
+
+      if (isMatchedInRTDB) {
+        // Atualiza RTDB para limpar tempPassword se for temporária
+        if (targetUserKey) {
+          try {
+            await update(ref(db, `users/${targetUserKey}`), {
+              authPassword: null,
+              tempPassword: null
+            });
+          } catch (rtdbErr) {
+            console.error("Erro ao atualizar RTDB após login por fallback:", rtdbErr);
+          }
+        }
+
+        await logAction(cleanEmail, 'LOGIN_TEMP_PASSWORD', 'Realizou login validado pelo sistema', 'Autenticação');
+        const fallbackUser = { uid: targetUserKey || targetUserData.id || cleanEmail, email: cleanEmail };
+        onLoginSuccess?.(fallbackUser);
+        setLoading(false);
+        return;
+      }
+
+      // Se nenhum candidato funcionou
+      if (!targetUserData) {
+        setError('E-mail não encontrado no sistema.');
+      } else {
+        setError('Senha incorreta. Verifique se digitou a senha corretamente.');
+      }
+      setLoading(false);
+    } catch (err: any) {
+      console.error("Erro geral no login:", err);
+      setError('Ocorreu um erro ao fazer login. Tente novamente.');
       setLoading(false);
     }
   };

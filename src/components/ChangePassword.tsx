@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { updatePassword } from 'firebase/auth';
-import { ref, update } from 'firebase/database';
+import { ref, update, get } from 'firebase/database';
 import { auth, db } from '../lib/firebase';
+import { logAction } from '../lib/auditLogger';
 import { Lock, Loader2, Eye, EyeOff, CheckCircle2, Circle } from 'lucide-react';
-import Footer from './Footer';
 
-export default function ChangePassword({ userId }: { userId: string }) {
+interface ChangePasswordProps {
+  userId: string;
+  userEmail?: string;
+}
+
+export default function ChangePassword({ userId, userEmail }: ChangePasswordProps) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -42,15 +47,73 @@ export default function ChangePassword({ userId }: { userId: string }) {
     }
 
     try {
-      const user = auth.currentUser;
-      if (user) {
-        await updatePassword(user, newPassword);
-        await update(ref(db, `users/${userId}`), { mustChangePassword: false });
-        // No need to redirect, the parent component will re-render and show the dashboard
+      // 1. Try updating Firebase Auth directly if currentUser exists
+      const currentUser = auth.currentUser;
+      let updatedInAuth = false;
+
+      if (currentUser) {
+        try {
+          await updatePassword(currentUser, newPassword);
+          updatedInAuth = true;
+        } catch (authErr: any) {
+          console.warn('Firebase Auth updatePassword warning:', authErr);
+        }
       }
+
+      const targetEmail = userEmail || currentUser?.email;
+
+      // 2. If client update failed or user authenticated via fallback, update via backend API directly in Authenticator
+      if (!updatedInAuth && targetEmail) {
+        try {
+          const resp = await fetch('/api/update-user-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: targetEmail, newPassword })
+          });
+          const data = await resp.json();
+          if (resp.ok && data.success) {
+            updatedInAuth = true;
+          }
+        } catch (apiErr) {
+          console.error("Erro na API /api/update-user-password:", apiErr);
+        }
+      }
+
+      // 3. Identify target user key in RTDB
+      let targetUid = userId || currentUser?.uid;
+
+      if (!targetUid && targetEmail) {
+        const cleanEmail = targetEmail.toLowerCase().trim();
+        const snapshot = await get(ref(db, 'users'));
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          for (const key of Object.keys(val)) {
+            if (val[key]?.email?.toLowerCase() === cleanEmail) {
+              targetUid = key;
+              break;
+            }
+          }
+        }
+      }
+
+      if (targetUid) {
+        // NÃO salvar senhas no documento do RTDB; remover tempPassword e authPassword
+        await update(ref(db, `users/${targetUid}`), { 
+          mustChangePassword: false,
+          tempPassword: null,
+          authPassword: null 
+        });
+      }
+
+      const logUserEmail = targetEmail || 'usuario';
+      await logAction(logUserEmail, 'CHANGE_PASSWORD', 'Redefiniu a senha do usuário no Authenticator', 'Autenticação');
+
+      // Recarrega para atualizar o estado global e entrar no sistema
+      window.location.reload();
+
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao atualizar senha. Tente novamente. ' + err.message);
+      setError('Erro ao atualizar senha. Tente novamente. ' + (err.message || ''));
     } finally {
       setLoading(false);
     }
